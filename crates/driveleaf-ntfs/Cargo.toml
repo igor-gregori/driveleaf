@@ -1,0 +1,27 @@
+[package]
+name = "driveleaf-ntfs"
+description = "Fast NTFS Master File Table scanner"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[lints]
+workspace = true
+
+[features]
+# Encoder for synthetic volumes, used by tests and benchmarks.
+synth = []
+
+[dependencies]
+rayon.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61", features = [
+    "Win32_Foundation",
+    "Win32_Security",
+    "Win32_Storage_FileSystem",
+    "Win32_System_IO",
+    "Win32_System_Ioctl",
+] }
