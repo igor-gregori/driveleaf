@@ -1,0 +1,14 @@
+{
+  "version": "{{VERSION}}",
+  "description": "Fast, open-source disk space analyzer that reads the NTFS Master File Table.",
+  "homepage": "https://github.com/{{REPOSITORY}}",
+  "license": "MIT|Apache-2.0",
+  "architecture": {
+    "64bit": {
+      "url": "https://github.com/{{REPOSITORY}}/releases/download/v{{VERSION}}/Driveleaf_{{VERSION}}_x64-portable.exe#/driveleaf.exe",
+      "hash": "{{PORTABLE_SHA256}}"
+    }
+  },
+  "bin": "driveleaf.exe",
+  "shortcuts": [["driveleaf.exe", "Driveleaf"]]
+}

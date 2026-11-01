@@ -1,0 +1,15 @@
+PackageIdentifier: Driveleaf.Driveleaf
+PackageVersion: "{{VERSION}}"
+MinimumOSVersion: 10.0.17763.0
+InstallerType: nullsoft
+Scope: user
+InstallModes:
+  - silent
+  - silentWithProgress
+UpgradeBehavior: install
+Installers:
+  - Architecture: x64
+    InstallerUrl: https://github.com/{{REPOSITORY}}/releases/download/v{{VERSION}}/Driveleaf_{{VERSION}}_x64-setup.exe
+    InstallerSha256: "{{INSTALLER_SHA256}}"
+ManifestType: installer
+ManifestVersion: 1.6.0

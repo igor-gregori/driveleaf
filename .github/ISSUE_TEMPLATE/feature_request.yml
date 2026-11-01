@@ -1,0 +1,14 @@
+name: Feature request
+description: An idea for showing what fills a disk
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Driveleaf only analyzes disks. Cleaning tools, duplicate finders and sync
+        features are out of scope.
+  - type: textarea
+    attributes:
+      label: What would you like to do
+      description: Describe the problem first, then any solution you have in mind.
+    validations:
+      required: true

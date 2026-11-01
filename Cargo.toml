@@ -4,17 +4,17 @@ members = ["crates/*", "apps/desktop/src-tauri", "spikes/*"]
 default-members = ["crates/*"]
 
 [workspace.package]
-version = "0.0.1"
+version = "0.1.0"
 edition = "2024"
 rust-version = "1.90"
 license = "MIT OR Apache-2.0"
 authors = ["The Driveleaf Authors"]
 
 [workspace.dependencies]
-driveleaf-core = { path = "crates/driveleaf-core" }
-driveleaf-ntfs = { path = "crates/driveleaf-ntfs" }
-driveleaf-treemap = { path = "crates/driveleaf-treemap" }
-driveleaf-win = { path = "crates/driveleaf-win" }
+driveleaf-core = { path = "crates/driveleaf-core", version = "0.1.0" }
+driveleaf-ntfs = { path = "crates/driveleaf-ntfs", version = "0.1.0" }
+driveleaf-treemap = { path = "crates/driveleaf-treemap", version = "0.1.0" }
+driveleaf-win = { path = "crates/driveleaf-win", version = "0.1.0" }
 rayon = "1"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

@@ -1,0 +1,34 @@
+name: Bug report
+description: Something does not work as it should
+body:
+  - type: textarea
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what you got instead.
+    validations:
+      required: true
+  - type: input
+    attributes:
+      label: Driveleaf version
+    validations:
+      required: true
+  - type: input
+    attributes:
+      label: Windows version
+      description: Run `winver` to see it.
+    validations:
+      required: true
+  - type: dropdown
+    attributes:
+      label: Scan mode
+      description: Shown in the status bar.
+      options:
+        - Fast mode
+        - Slow mode
+        - Not relevant
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: Totals, if they look wrong
+      description: The drive's used space in Properties, and what Driveleaf shows.

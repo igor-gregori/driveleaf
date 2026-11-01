@@ -1,0 +1,18 @@
+PackageIdentifier: Driveleaf.Driveleaf
+PackageVersion: "{{VERSION}}"
+PackageLocale: en-US
+Publisher: The Driveleaf Authors
+PublisherUrl: https://github.com/{{REPOSITORY}}
+PackageName: Driveleaf
+PackageUrl: https://github.com/{{REPOSITORY}}
+License: MIT OR Apache-2.0
+LicenseUrl: https://github.com/{{REPOSITORY}}/blob/main/LICENSE-MIT
+ShortDescription: Fast, open-source disk space analyzer that reads the NTFS Master File Table.
+Moniker: driveleaf
+Tags:
+  - disk
+  - disk-space
+  - ntfs
+  - treemap
+ManifestType: defaultLocale
+ManifestVersion: 1.6.0

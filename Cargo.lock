@@ -723,7 +723,7 @@ dependencies = [
 
 [[package]]
 name = "driveleaf-cli"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "driveleaf-core",
  "driveleaf-ntfs",
@@ -733,7 +733,7 @@ dependencies = [
 
 [[package]]
 name = "driveleaf-core"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "driveleaf-ntfs",
  "driveleaf-treemap",
@@ -745,7 +745,7 @@ dependencies = [
 
 [[package]]
 name = "driveleaf-desktop"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "driveleaf-core",
  "driveleaf-ntfs",
@@ -758,7 +758,7 @@ dependencies = [
 
 [[package]]
 name = "driveleaf-ntfs"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "rayon",
  "windows-sys 0.61.2",
@@ -766,11 +766,11 @@ dependencies = [
 
 [[package]]
 name = "driveleaf-treemap"
-version = "0.0.1"
+version = "0.1.0"
 
 [[package]]
 name = "driveleaf-win"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "windows",
  "windows-sys 0.61.2",
@@ -831,7 +831,7 @@ checksum = "4ef6b89e5b37196644d8796de5268852ff179b44e96276cf4290264843743bb7"
 
 [[package]]
 name = "engine-compare"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "driveleaf-ntfs",
  "mft",
