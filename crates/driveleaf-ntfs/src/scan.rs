@@ -14,8 +14,8 @@ use crate::mft::{MftLayout, ReadJob};
 use crate::names::push_wtf8;
 use crate::record::{
     ATTR_DATA, ATTR_FILE_NAME, ATTR_REPARSE_POINT, ATTR_STANDARD_INFORMATION, AttributeBody,
-    Attributes, FileName, NAMESPACE_DOS, NonResident, RecordError, RecordHeader, StandardInfo,
-    apply_fixups, reparse_tag,
+    Attributes, FILE_ATTRIBUTE_REPARSE_POINT, FileName, NAMESPACE_DOS, NonResident, RecordError,
+    RecordHeader, StandardInfo, apply_fixups, reparse_tag,
 };
 use crate::runs::Runs;
 use crate::source::{AlignedBuffer, BlockSource};
@@ -471,7 +471,7 @@ impl BlockParser {
             let unnamed = attribute.name.is_empty();
             match attribute.body {
                 AttributeBody::Resident(value) => match attribute.type_code {
-                    ATTR_FILE_NAME => damaged |= !self.add_name(record, value),
+                    ATTR_FILE_NAME => damaged |= !self.add_name(&mut file, value),
                     ATTR_STANDARD_INFORMATION => {
                         if let Some(info) = StandardInfo::parse(value) {
                             file.attributes = info.attributes;
@@ -530,10 +530,15 @@ impl BlockParser {
     }
 
     /// Records a name. Returns false when the attribute is unusable.
-    fn add_name(&mut self, record: u32, value: &[u8]) -> bool {
+    fn add_name(&mut self, file: &mut RawFile, value: &[u8]) -> bool {
         let Some(name) = FileName::parse(value) else {
             return false;
         };
+        // A long reparse value leaves the record, but the name keeps its tag.
+        if file.attributes & FILE_ATTRIBUTE_REPARSE_POINT != 0 {
+            file.reparse_tag = name.reparse_tag;
+        }
+        let record = file.record;
         if name.namespace == NAMESPACE_DOS {
             return true;
         }

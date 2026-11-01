@@ -257,10 +257,15 @@ pub struct FileName<'a> {
     pub namespace: u8,
     /// Name as raw UTF-16LE.
     pub name: &'a [u8],
+    /// The file's reparse tag, or zero. The same field holds the size of the
+    /// extended attributes when the file is not a reparse point.
+    pub reparse_tag: u32,
 }
 
 /// The DOS 8.3 twin of a long name, which never needs its own tree entry.
 pub const NAMESPACE_DOS: u8 = 2;
+
+pub const FILE_ATTRIBUTE_REPARSE_POINT: u32 = 0x0400;
 
 impl<'a> FileName<'a> {
     pub fn parse(value: &'a [u8]) -> Option<Self> {
@@ -268,11 +273,17 @@ impl<'a> FileName<'a> {
         let name_chars = usize::from(*value.get(0x40)?);
         let namespace = *value.get(0x41)?;
         let name = value.get(0x42..0x42 + name_chars * 2)?;
+        let is_reparse_point = le_u32(value, 0x38)? & FILE_ATTRIBUTE_REPARSE_POINT != 0;
         Some(Self {
             parent_record: parent & RECORD_NUMBER_MASK,
             parent_sequence: (parent >> 48) as u16,
             namespace,
             name,
+            reparse_tag: if is_reparse_point {
+                le_u32(value, 0x3C)?
+            } else {
+                0
+            },
         })
     }
 }
