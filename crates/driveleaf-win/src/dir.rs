@@ -39,7 +39,7 @@ const OFFSET_NAME: usize = 104;
 pub struct DirEntry {
     pub name: OsString,
     pub attributes: u32,
-    /// The reparse tag, when `attributes` marks a reparse point.
+    /// The reparse tag, or zero when this is not a reparse point.
     pub reparse_tag: u32,
     pub logical: u64,
     pub allocated: u64,
@@ -50,14 +50,6 @@ pub struct DirEntry {
 impl DirEntry {
     pub fn is_directory(&self) -> bool {
         self.attributes & FILE_ATTRIBUTE_DIRECTORY != 0
-    }
-
-    /// True for symbolic links and junctions, which lead somewhere else. Cloud
-    /// placeholders are reparse points too, but they are the real thing.
-    pub fn is_link(&self) -> bool {
-        const NAME_SURROGATE: u32 = 0x2000_0000;
-        self.attributes & FILE_ATTRIBUTE_REPARSE_POINT != 0
-            && self.reparse_tag & NAME_SURROGATE != 0
     }
 }
 
@@ -81,10 +73,16 @@ fn parse_batch(batch: &[u8], emit: &mut impl FnMut(DirEntry)) {
         let units: Vec<u16> = pairs.iter().map(|&pair| u16::from_le_bytes(pair)).collect();
         let name = OsString::from_wide(&units);
         if name != "." && name != ".." {
+            let attributes = u32_at(entry, OFFSET_ATTRIBUTES);
             emit(DirEntry {
                 name,
-                attributes: u32_at(entry, OFFSET_ATTRIBUTES),
-                reparse_tag: u32_at(entry, OFFSET_EA_SIZE),
+                attributes,
+                // The system reuses this field for the tag of a reparse point.
+                reparse_tag: if attributes & FILE_ATTRIBUTE_REPARSE_POINT != 0 {
+                    u32_at(entry, OFFSET_EA_SIZE)
+                } else {
+                    0
+                },
                 logical: u64_at(entry, OFFSET_END_OF_FILE),
                 allocated: u64_at(entry, OFFSET_ALLOCATION),
                 modified: u64_at(entry, OFFSET_LAST_WRITE),
@@ -195,7 +193,7 @@ mod tests {
         assert_eq!(entries[1].name, "relat\u{F3}rio \u{1F33F}.txt");
         assert_eq!(entries[2].name, "sub");
         assert!(entries[2].is_directory());
-        assert!(!entries[2].is_link());
+        assert_eq!(entries[2].reparse_tag, 0);
     }
 
     #[test]

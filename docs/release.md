@@ -15,7 +15,6 @@ explicit approval. Do the steps in order.
 - [ ] Add the repository URL to `packaging/`.
 - [ ] Turn on private vulnerability reporting, which `SECURITY.md` promises.
 - [ ] Watch CI go green, which has never run. Fix what only shows up there.
-- [ ] Commit the Windows fixture: `fixtures/windows-ntfs.img.gz` and its manifest.
 - [ ] Ask the SignPath Foundation for free code signing, after checking its current
       conditions. Without a signature, SmartScreen warns every user.
 - [ ] Register a domain, if wanted. `driveleaf.dev`, `.app`, `.org` and `.io` were

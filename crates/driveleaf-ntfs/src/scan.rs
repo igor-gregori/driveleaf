@@ -13,8 +13,9 @@ use crate::geometry::Geometry;
 use crate::mft::{MftLayout, ReadJob};
 use crate::names::push_wtf8;
 use crate::record::{
-    ATTR_DATA, ATTR_FILE_NAME, ATTR_STANDARD_INFORMATION, AttributeBody, Attributes, FileName,
-    NAMESPACE_DOS, NonResident, RecordError, RecordHeader, StandardInfo, apply_fixups,
+    ATTR_DATA, ATTR_FILE_NAME, ATTR_REPARSE_POINT, ATTR_STANDARD_INFORMATION, AttributeBody,
+    Attributes, FileName, NAMESPACE_DOS, NonResident, RecordError, RecordHeader, StandardInfo,
+    apply_fixups, reparse_tag,
 };
 use crate::runs::Runs;
 use crate::source::{AlignedBuffer, BlockSource};
@@ -92,6 +93,8 @@ pub struct RawFile {
     pub attributes: u32,
     /// Last modification, in 100 ns ticks since 1601.
     pub modified: u64,
+    /// What kind of reparse point this is, or zero for an ordinary file.
+    pub reparse_tag: u32,
     /// [`RAW_DIRECTORY`] and [`RAW_EXTENSION`].
     pub flags: u8,
     /// Size of the unnamed data stream.
@@ -226,6 +229,25 @@ impl ScanOutput {
         self.chunks.iter().map(Chunk::memory_bytes).sum::<usize>()
             + self.chunks.capacity() * size_of::<Chunk>()
     }
+}
+
+/// Reads one record by its number, with its fixups applied. Meant for tools that
+/// look at a single record; a scan reads them in blocks.
+pub fn read_record<S: BlockSource + ?Sized>(
+    source: &S,
+    geometry: &Geometry,
+    number: u32,
+) -> Result<Vec<u8>, Error> {
+    let layout = MftLayout::load(source, geometry)?;
+    let mut buffer = AlignedBuffer::new(geometry.bytes_per_record as usize);
+    let job = ReadJob {
+        first_record: u64::from(number),
+        records: 1,
+    };
+    layout.read_job(source, job, buffer.as_mut_slice())?;
+    let record = buffer.as_mut_slice();
+    apply_fixups(record).map_err(|_| Error::BadMft("the record is damaged"))?;
+    Ok(record.to_vec())
 }
 
 /// Block buffers shared by the readers and the parsers.
@@ -437,6 +459,7 @@ impl BlockParser {
             link_count: header.link_count,
             attributes: 0,
             modified: 0,
+            reparse_tag: 0,
             flags: 0,
             logical_size: 0,
             stream_size: 0,
@@ -456,6 +479,7 @@ impl BlockParser {
                         }
                     }
                     ATTR_DATA => add_stream(&mut file, unnamed, value.len() as u64),
+                    ATTR_REPARSE_POINT => file.reparse_tag = reparse_tag(value).unwrap_or(0),
                     _ => {}
                 },
                 AttributeBody::NonResident(extent) if extent.lowest_vcn == 0 => {

@@ -20,7 +20,6 @@ const NAMED: u8 = 4;
 const ATTR_HIDDEN: u32 = 0x0002;
 const ATTR_SYSTEM: u32 = 0x0004;
 const ATTR_SPARSE: u32 = 0x0200;
-const ATTR_REPARSE: u32 = 0x0400;
 const ATTR_COMPRESSED: u32 = 0x0800;
 const ATTR_OFFLINE: u32 = 0x1000;
 const ATTR_RECALL_ON_OPEN: u32 = 0x0004_0000;
@@ -37,6 +36,7 @@ pub const UNNAMED_NAME: &str = "<Unnamed records>";
 struct Slot {
     sequence: u16,
     attributes: u32,
+    reparse_tag: u32,
     modified: u64,
     logical: u64,
     stream: u64,
@@ -44,8 +44,19 @@ struct Slot {
     state: u8,
 }
 
-/// Turns Windows file attributes into model flags.
-pub(crate) fn node_flags(attributes: u32) -> u16 {
+/// Tag bit of reparse points that lead somewhere else, like symbolic links and
+/// junctions. Others, such as WOF compression or cloud files, are the file itself.
+const TAG_NAME_SURROGATE: u32 = 0x2000_0000;
+/// The command aliases of Store apps, which lead elsewhere but lack that bit.
+const TAG_APP_EXEC_LINK: u32 = 0x8000_001B;
+
+/// True for a reparse tag that points at something else.
+pub(crate) fn is_link_tag(tag: u32) -> bool {
+    tag & TAG_NAME_SURROGATE != 0 || tag == TAG_APP_EXEC_LINK
+}
+
+/// Turns Windows file attributes and a reparse tag into model flags.
+pub(crate) fn node_flags(attributes: u32, reparse_tag: u32) -> u16 {
     let mut flags = 0;
     if attributes & ATTR_HIDDEN != 0 {
         flags |= FLAG_HIDDEN;
@@ -59,10 +70,10 @@ pub(crate) fn node_flags(attributes: u32) -> u16 {
     if attributes & ATTR_COMPRESSED != 0 {
         flags |= FLAG_COMPRESSED;
     }
-    // Cloud placeholders are reparse points too, but they are real files.
     if attributes & ATTR_CLOUD != 0 {
         flags |= FLAG_CLOUD;
-    } else if attributes & ATTR_REPARSE != 0 {
+    }
+    if is_link_tag(reparse_tag) {
         flags |= FLAG_LINK;
     }
     flags
@@ -98,6 +109,7 @@ pub fn build_model(output: &ScanOutput, geometry: &Geometry, root_name: &str) ->
                 slot.sequence = file.sequence;
                 slot.attributes = file.attributes;
                 slot.modified = file.modified;
+                slot.reparse_tag = file.reparse_tag;
                 slot.state |= SEEN;
                 if file.flags & RAW_DIRECTORY != 0 {
                     slot.state |= DIRECTORY;
@@ -157,11 +169,14 @@ pub fn build_model(output: &ScanOutput, geometry: &Geometry, root_name: &str) ->
             let slot = *slot;
 
             let is_directory = slot.state & DIRECTORY != 0;
-            let mut flags = node_flags(slot.attributes);
+            let mut flags = node_flags(slot.attributes, slot.reparse_tag);
             if is_directory {
                 flags |= FLAG_DIRECTORY;
             }
-            if name.record < FIRST_USER_RECORD {
+            // Windows also puts ordinary files in the last reserved records, so
+            // the number alone does not make something a metafile.
+            let metafile = name.record < FIRST_USER_RECORD && chunk.name(name).starts_with(b"$");
+            if metafile {
                 flags |= FLAG_METAFILE;
             }
             if slot.stream > 0 {
@@ -179,7 +194,7 @@ pub fn build_model(output: &ScanOutput, geometry: &Geometry, root_name: &str) ->
                 &folder_nodes,
             )
             .unwrap_or(orphans);
-            let parent = if parent == ROOT && name.record < FIRST_USER_RECORD {
+            let parent = if parent == ROOT && metafile {
                 metadata
             } else {
                 parent
@@ -202,7 +217,7 @@ pub fn build_model(output: &ScanOutput, geometry: &Geometry, root_name: &str) ->
         tree.update(
             ROOT,
             NodeData {
-                flags: node_flags(root.attributes) & !FLAG_LINK,
+                flags: node_flags(root.attributes, 0),
                 file_id: ROOT_RECORD,
                 logical: 0,
                 allocated: root.allocated,
@@ -268,6 +283,7 @@ mod tests {
     use std::io::Cursor;
 
     const CLUSTER: u64 = 4096;
+    const ATTR_REPARSE: u32 = 0x0400;
     const LAYOUT: ImageLayout = ImageLayout {
         bytes_per_cluster: 4096,
         bytes_per_record: 1024,
@@ -416,6 +432,55 @@ mod tests {
     }
 
     #[test]
+    fn only_dollar_names_in_reserved_records_are_metafiles() {
+        // Windows was seen keeping bootTel.dat in record 19.
+        let ordinary = RecordSpec::file(1)
+            .attr(AttrSpec::standard(0x20))
+            .attr(AttrSpec::name(SYNTH_ROOT, 5, 3, "bootTel.dat"));
+        let reserved = RecordSpec::file(1)
+            .attr(AttrSpec::standard(0x06))
+            .attr(AttrSpec::name(SYNTH_ROOT, 5, 3, "$Reserved"));
+        let model = model_of(&LAYOUT, vec![root_dir(), (19, ordinary), (20, reserved)]);
+        assert_eq!(
+            model.flags(find(&model, "X:\\bootTel.dat")) & FLAG_METAFILE,
+            0
+        );
+        let moved = find(&model, "X:\\$NTFS metadata\\$Reserved");
+        assert_ne!(model.flags(moved) & FLAG_METAFILE, 0);
+    }
+
+    #[test]
+    fn only_tags_that_point_elsewhere_are_links() {
+        let reparse = |name, tag: u32| {
+            RecordSpec::file(1)
+                .attr(AttrSpec::standard(ATTR_REPARSE))
+                .attr(AttrSpec::name(SYNTH_ROOT, 5, 3, name))
+                .attr(AttrSpec::Resident {
+                    type_code: driveleaf_ntfs::record::ATTR_REPARSE_POINT,
+                    name: Vec::new(),
+                    value: tag.to_le_bytes().to_vec(),
+                })
+        };
+        let model = model_of(
+            &LAYOUT,
+            vec![
+                root_dir(),
+                (30, reparse("symlink", 0xA000_000C)),
+                (31, reparse("junction", 0xA000_0003)),
+                (32, reparse("wof", 0x8000_0017)),
+                (33, reparse("cloud", 0x9000_001A)),
+                (34, reparse("alias", 0x8000_001B)),
+            ],
+        );
+        let flags = |path| model.flags(find(&model, path));
+        assert_ne!(flags("X:\\symlink") & FLAG_LINK, 0);
+        assert_ne!(flags("X:\\junction") & FLAG_LINK, 0);
+        assert_ne!(flags("X:\\alias") & FLAG_LINK, 0);
+        assert_eq!(flags("X:\\wof") & FLAG_LINK, 0);
+        assert_eq!(flags("X:\\cloud") & FLAG_LINK, 0);
+    }
+
+    #[test]
     fn attribute_flags_reach_the_nodes() {
         let hidden = |name, attributes| {
             RecordSpec::file(1)
@@ -427,14 +492,12 @@ mod tests {
             vec![
                 root_dir(),
                 (30, hidden("hidden", ATTR_HIDDEN | ATTR_SYSTEM)),
-                (31, hidden("link", ATTR_REPARSE)),
-                (32, hidden("cloud", ATTR_REPARSE | ATTR_RECALL_ON_DATA)),
+                (31, hidden("cloud", ATTR_REPARSE | ATTR_RECALL_ON_DATA)),
             ],
         );
         let flags = |path| model.flags(find(&model, path));
         assert_ne!(flags("X:\\hidden") & FLAG_HIDDEN, 0);
         assert_ne!(flags("X:\\hidden") & FLAG_SYSTEM, 0);
-        assert_ne!(flags("X:\\link") & FLAG_LINK, 0);
         assert_ne!(flags("X:\\cloud") & FLAG_CLOUD, 0);
         assert_eq!(flags("X:\\cloud") & FLAG_LINK, 0);
     }

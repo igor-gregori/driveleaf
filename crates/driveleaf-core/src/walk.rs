@@ -13,6 +13,8 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 use driveleaf_ntfs::ScanControl;
 
+#[cfg(windows)]
+use crate::mft_tree::is_link_tag;
 use crate::mft_tree::{ORPHANS_NAME, node_flags};
 use crate::model::{
     FLAG_DIRECTORY, FLAG_HARD_LINK, FLAG_LINK, Model, NodeData, NodeId, ROOT, ScanMode,
@@ -39,7 +41,7 @@ fn list(path: &Path, track_links: bool, out: &mut Vec<Entry>) -> io::Result<()> 
     driveleaf_win::dir::list_directory(path, |entry| {
         out.push(Entry {
             is_directory: entry.is_directory(),
-            is_link: entry.is_link(),
+            is_link: is_link_tag(entry.reparse_tag),
             attributes: entry.attributes,
             logical: entry.logical,
             allocated: entry.allocated,
@@ -109,7 +111,7 @@ fn visit_folder<'s>(path: PathBuf, node: NodeId, shared: &'s Shared<'_>, scope: 
     {
         let mut state = shared.state.lock().expect("no walker panicked");
         for entry in &entries {
-            let mut flags = node_flags(entry.attributes);
+            let mut flags = node_flags(entry.attributes, 0);
             if entry.is_directory {
                 flags |= FLAG_DIRECTORY;
             }

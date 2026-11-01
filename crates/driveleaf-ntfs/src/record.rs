@@ -294,6 +294,11 @@ impl StandardInfo {
     }
 }
 
+/// The tag at the start of a `$REPARSE_POINT` value.
+pub fn reparse_tag(value: &[u8]) -> Option<u32> {
+    le_u32(value, 0)
+}
+
 /// One entry of an `$ATTRIBUTE_LIST`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct ListEntry {

@@ -4,6 +4,9 @@
 # formats a virtual disk; using the result does not.
 #
 # It touches nothing but its own temporary virtual disk.
+#
+# The image records the security identifier of the account that built it, so it
+# stays out of the repository. CI builds a fresh one on every run.
 param(
     [string]$OutDir = $PSScriptRoot,
     [string]$Letter = '',
@@ -113,7 +116,6 @@ try {
         }
     $volume = Get-Volume -DriveLetter $Letter
     $manifest = [ordered]@{
-        used_bytes = $volume.Size - $volume.SizeRemaining
         entries = @($entries)
     }
     [IO.File]::WriteAllText(

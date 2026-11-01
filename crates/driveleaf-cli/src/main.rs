@@ -14,10 +14,14 @@ use driveleaf_core::model::{
 use driveleaf_core::query::SortKey;
 use driveleaf_core::scanner::{ScanError, scan_folder, scan_image as scan_image_tree};
 use driveleaf_ntfs::demo::{demo_record_count, for_each_demo_record};
+use driveleaf_ntfs::record::{
+    ATTR_REPARSE_POINT, AttributeBody, Attributes, RecordHeader, reparse_tag,
+};
 use driveleaf_ntfs::replay::ReplaySource;
 use driveleaf_ntfs::synth::{ImageLayout, TreeTotals, for_each_generated, write_image};
 use driveleaf_ntfs::{
-    BlockSource, Geometry, ImageFile, ScanControl, ScanOptions, ScanOutput, peak_memory_bytes, scan,
+    BlockSource, Geometry, ImageFile, ScanControl, ScanOptions, ScanOutput, peak_memory_bytes,
+    read_record, scan,
 };
 use driveleaf_treemap::{LayoutOptions, layout_tree};
 use serde_json::{Value, json};
@@ -29,6 +33,7 @@ usage:
   driveleaf-cli mft <drive letter or image file>   scan an MFT and print JSON totals
   driveleaf-cli bench <target>                     time the queries behind the interface
   driveleaf-cli dump <drive letter or image file>  scan an MFT and print every record as TSV
+  driveleaf-cli record <image file> <number>       print the attributes of one record
   driveleaf-cli capture <drive letter> <file>      save what a scan reads, to replay it later
   driveleaf-cli demo <image file>                  write a made-up disk for screenshots
   driveleaf-cli synth <image file> <records> [fragments]
@@ -47,6 +52,7 @@ fn main() -> ExitCode {
         ["bench", target] => bench(target),
         ["mft", target] => mft(target),
         ["dump", target] => dump(target),
+        ["record", path, number] => show_record(path, number),
         ["capture", target, path] => capture(target, path),
         ["demo", path] => demo(path),
         ["synth", path, records] => synth(path, records, "1"),
@@ -393,17 +399,18 @@ fn scan_tree(target: &str, format: &str) -> Result<(), String> {
     let model = scan_any(target).map_err(|error| error.to_string())?;
     let mut out = BufWriter::with_capacity(1 << 20, std::io::stdout().lock());
     let written = if format == "csv" {
-        writeln!(out, "path,kind,logical,allocated,files,modified").and_then(|()| {
+        writeln!(out, "path,kind,logical,allocated,files,modified,id").and_then(|()| {
             each_node(&model, |node| {
                 writeln!(
                     out,
-                    "{},{},{},{},{},{}",
+                    "{},{},{},{},{},{},{}",
                     csv_field(&model.display_path(node)),
                     kind(&model, node),
                     model.logical(node),
                     model.allocated(node),
                     model.files(node),
                     iso_time(model.modified(node)),
+                    model.file_id(node),
                 )
             })
         })
@@ -485,6 +492,57 @@ fn synth(path: &str, records: &str, fragments: &str) -> Result<(), String> {
         "logical_bytes": totals.logical_bytes,
         "stream_bytes": totals.stream_bytes,
         "allocated_bytes": totals.allocated_bytes,
+    }));
+    Ok(())
+}
+
+/// Prints what one record holds, without any names. For looking into how a
+/// particular file is stored.
+fn show_record(path: &str, number: &str) -> Result<(), String> {
+    let number: u32 = number
+        .parse()
+        .map_err(|_| format!("bad record number: {number}"))?;
+    let path = Path::new(path);
+    let describe = |error: std::io::Error| format!("{}: {error}", path.display());
+    let record = if ReplaySource::is_capture(path).map_err(describe)? {
+        let replay = ReplaySource::open(path).map_err(describe)?;
+        read_record(&replay, &replay.geometry(), number)
+    } else {
+        let image = ImageFile::open(path).map_err(describe)?;
+        let mut boot = vec![0_u8; 4096];
+        image.read_exact_at(0, &mut boot).map_err(describe)?;
+        let geometry = Geometry::from_boot_sector(&boot).map_err(|error| error.to_string())?;
+        read_record(&image, &geometry, number)
+    }
+    .map_err(|error| error.to_string())?;
+
+    let header = RecordHeader::parse(&record).map_err(|error| format!("{error:?}"))?;
+    let attributes: Vec<Value> = Attributes::new(&record, &header)
+        .map(|attribute| match attribute.body {
+            AttributeBody::Resident(value) => json!({
+                "type": format!("{:#x}", attribute.type_code),
+                "named": !attribute.name.is_empty(),
+                "resident_bytes": value.len(),
+                "reparse_tag": (attribute.type_code == ATTR_REPARSE_POINT)
+                    .then(|| reparse_tag(value).map(|tag| format!("{tag:#x}"))),
+            }),
+            AttributeBody::NonResident(extent) => json!({
+                "type": format!("{:#x}", attribute.type_code),
+                "named": !attribute.name.is_empty(),
+                "lowest_vcn": extent.lowest_vcn,
+                "real_size": extent.real_size,
+                "allocated_size": extent.allocated_size,
+                "total_allocated": extent.total_allocated,
+            }),
+        })
+        .collect();
+    print_json(&json!({
+        "record": number,
+        "flags": header.flags,
+        "links": header.link_count,
+        "base_record": header.base_record,
+        "bytes_used": header.bytes_used,
+        "attributes": attributes,
     }));
     Ok(())
 }

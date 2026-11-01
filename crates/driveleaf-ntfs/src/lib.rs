@@ -28,7 +28,7 @@ pub use geometry::Geometry;
 pub use runs::{Run, Runs};
 pub use scan::{
     Chunk, RAW_DIRECTORY, RAW_EXTENSION, RawFile, RawName, ScanControl, ScanOptions, ScanOutput,
-    ScanStats, scan,
+    ScanStats, read_record, scan,
 };
 pub use source::{BlockSource, ImageFile};
 
