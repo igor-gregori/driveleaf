@@ -34,7 +34,7 @@ export function NodeMenu({ row, onOpen, onReveal, onCopyPath, onProperties, onRe
         <ExternalLink />
         {t("action.reveal")}
       </ContextMenuItem>
-      <ContextMenuItem onSelect={() => onCopyPath(row)}>
+      <ContextMenuItem disabled={!onDisk} onSelect={() => onCopyPath(row)}>
         <Copy />
         {t("action.copyPath")}
       </ContextMenuItem>

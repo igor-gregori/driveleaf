@@ -140,6 +140,7 @@ export const api = {
   fileTypes: () => invoke<TypeRow[]>("file_types"),
   search: (query: string, limit: number) => invoke<PathRowPage>("search", { query, limit }),
   revealInExplorer: (node: number) => invoke<void>("reveal_in_explorer", { node }),
+  copyPath: (node: number) => invoke<void>("copy_path", { node }),
   showProperties: (node: number) => invoke<void>("show_properties", { node }),
   recycle: (nodes: number[]) => invoke<RecycleResult>("recycle", { nodes }),
   relaunchElevated: (letter: string | null) => invoke<void>("relaunch_elevated", { letter }),

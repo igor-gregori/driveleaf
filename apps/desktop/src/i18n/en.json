@@ -82,5 +82,6 @@
   "treemap.unavailable": "The treemap needs WebGL2, which is not available here. The folders and lists on the left still work.",
   "error.title": "Something went wrong",
   "error.body": "Driveleaf hit a bug it could not recover from. Your files were not touched.",
-  "error.reload": "Reload"
+  "error.reload": "Reload",
+  "refused.unsafeName": "This entry has a name Windows cannot use safely."
 }

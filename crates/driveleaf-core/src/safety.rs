@@ -19,6 +19,8 @@ pub enum Refusal {
     AlreadyRemoved,
     /// Part of Windows, or a folder Windows needs in place.
     Protected,
+    /// A name that Windows paths cannot express, as a forged volume could hold.
+    UnsafeName,
 }
 
 impl Refusal {
@@ -30,6 +32,7 @@ impl Refusal {
             Refusal::Metafile => "metafile",
             Refusal::AlreadyRemoved => "alreadyRemoved",
             Refusal::Protected => "protected",
+            Refusal::UnsafeName => "unsafeName",
         }
     }
 }
@@ -59,6 +62,32 @@ const PROTECTED_ENTRIES: [&[u8]; 9] = [
     b"bootmgr",
 ];
 
+/// True for a name Windows itself could produce as one path component.
+///
+/// The MFT can hold anything, so a forged volume might name a file `..\\..\\x`
+/// to reach outside its folder, or use a quote to break out of a command line.
+fn is_plain_name(name: &[u8]) -> bool {
+    !name.is_empty()
+        && name != b"."
+        && name != b".."
+        && !name
+            .iter()
+            .any(|&byte| byte < 0x20 || b"\\/:*?\"<>|".contains(&byte))
+}
+
+/// Checks that every name on the way to a node is safe to put in a path.
+pub fn check_path(model: &Model, node: NodeId) -> Result<(), Refusal> {
+    let path = model.ancestry(node);
+    if path[1..]
+        .iter()
+        .all(|&step| is_plain_name(model.name_bytes(step)))
+    {
+        Ok(())
+    } else {
+        Err(Refusal::UnsafeName)
+    }
+}
+
 fn lower(model: &Model, node: NodeId) -> Vec<u8> {
     model.name_bytes(node).to_ascii_lowercase()
 }
@@ -78,6 +107,7 @@ pub fn check_removable(model: &Model, node: NodeId) -> Result<(), Refusal> {
     if flags & FLAG_METAFILE != 0 {
         return Err(Refusal::Metafile);
     }
+    check_path(model, node)?;
     let path = model.ancestry(node);
     let top = lower(model, path[1]);
     if PROTECTED_TREES.contains(&top.as_slice()) {
@@ -216,6 +246,44 @@ mod tests {
         );
         assert_eq!(tree.check("C:\\Users"), Err(Refusal::Protected));
         assert_eq!(tree.check("C:\\Users\\igor"), Err(Refusal::Protected));
+    }
+
+    #[test]
+    fn names_that_escape_their_folder_are_refused() {
+        let mut builder = TreeBuilder::new("D:\\", 8, 64);
+        let good = builder.add(ROOT, b"pasta", folder());
+        let cases: [&[u8]; 8] = [
+            b"..",
+            b".",
+            b"..\\..\\Windows",
+            b"a/b",
+            b"stream:hidden",
+            b"quo\"te",
+            b"line\nbreak",
+            b"",
+        ];
+        let forged: Vec<NodeId> = cases
+            .iter()
+            .map(|name| builder.add(good, name, file()))
+            .collect();
+        let below = builder.add(forged[0], b"child.txt", file());
+        let fine = builder.add(good, b"relat\xC3\xB3rio final (1).txt", file());
+        let model = builder.finish(
+            "<orphans>",
+            VolumeSummary {
+                mode: ScanMode::Mft,
+                used_bytes: None,
+                total_bytes: None,
+                problems: 0,
+            },
+        );
+        for node in forged {
+            assert_eq!(check_path(&model, node), Err(Refusal::UnsafeName));
+            assert_eq!(check_removable(&model, node), Err(Refusal::UnsafeName));
+        }
+        assert_eq!(check_path(&model, below), Err(Refusal::UnsafeName));
+        assert_eq!(check_path(&model, fine), Ok(()));
+        assert_eq!(check_path(&model, ROOT), Ok(()));
     }
 
     #[test]

@@ -8,8 +8,10 @@ use std::ffi::{OsStr, OsString};
 use std::io;
 use std::mem;
 use std::os::windows::process::CommandExt;
+use std::path::PathBuf;
 use std::process::Command;
 use std::ptr;
+use std::time::Duration;
 
 use windows::Win32::Foundation::HWND;
 use windows::Win32::System::Com::{
@@ -21,24 +23,44 @@ use windows::Win32::UI::Shell::{
     FOFX_RECYCLEONDELETE, FileOperation, IFileOperation, IShellItem, SHCreateItemFromParsingName,
 };
 use windows::core::{HSTRING, Result as WinResult};
-use windows_sys::Win32::Foundation::{CloseHandle, INVALID_HANDLE_VALUE};
+use windows_sys::Win32::Foundation::{CloseHandle, GlobalFree, INVALID_HANDLE_VALUE};
 use windows_sys::Win32::Storage::FileSystem::{
     BY_HANDLE_FILE_INFORMATION, CreateFileW, FILE_FLAG_BACKUP_SEMANTICS,
     FILE_FLAG_OPEN_REPARSE_POINT, FILE_READ_ATTRIBUTES, FILE_SHARE_DELETE, FILE_SHARE_READ,
     FILE_SHARE_WRITE, GetFileInformationByHandle, OPEN_EXISTING,
 };
+use windows_sys::Win32::System::DataExchange::{
+    CloseClipboard, EmptyClipboard, OpenClipboard, SetClipboardData,
+};
+use windows_sys::Win32::System::Memory::{GMEM_MOVEABLE, GlobalAlloc, GlobalLock, GlobalUnlock};
+use windows_sys::Win32::System::Ole::CF_UNICODETEXT;
+use windows_sys::Win32::System::SystemInformation::GetSystemWindowsDirectoryW;
 use windows_sys::Win32::UI::Shell::{SEE_MASK_INVOKEIDLIST, SHELLEXECUTEINFOW, ShellExecuteExW};
 use windows_sys::Win32::UI::WindowsAndMessaging::SW_SHOW;
 
-use crate::{extended, wide};
+use crate::{extended, from_wide, wide};
 
 /// Opens Explorer with the item selected.
 pub fn reveal_in_explorer(path: &OsStr) -> io::Result<()> {
     let mut argument = OsString::from("/select,\"");
     argument.push(path);
     argument.push("\"");
-    Command::new("explorer.exe").raw_arg(argument).spawn()?;
+    Command::new(system_program("explorer.exe")?)
+        .raw_arg(argument)
+        .spawn()?;
     Ok(())
+}
+
+/// The full path of a program in the Windows folder. A bare name would also
+/// search the app's own folder, and the app may be running elevated.
+fn system_program(name: &str) -> io::Result<PathBuf> {
+    let mut buffer = [0_u16; 261];
+    // SAFETY: the pointer and length describe `buffer`.
+    let length = unsafe { GetSystemWindowsDirectoryW(buffer.as_mut_ptr(), buffer.len() as u32) };
+    if length == 0 || length as usize >= buffer.len() {
+        return Err(io::Error::last_os_error());
+    }
+    Ok(PathBuf::from(from_wide(&buffer)).join(name))
 }
 
 /// Opens the standard properties dialog.
@@ -91,6 +113,70 @@ pub fn file_id(path: &OsStr) -> io::Result<u64> {
         return Err(error);
     }
     Ok((u64::from(info.nFileIndexHigh) << 32) | u64::from(info.nFileIndexLow))
+}
+
+/// Puts text on the clipboard, with no permission prompt from the web view.
+pub fn copy_text(text: &OsStr) -> io::Result<()> {
+    // Another program can hold the clipboard for a moment.
+    const ATTEMPTS: u32 = 10;
+    const PAUSE: Duration = Duration::from_millis(20);
+
+    let units = wide(text);
+    let bytes = units.len() * size_of::<u16>();
+    let mut attempt = 0;
+    // SAFETY: a null owner is allowed; `CloseClipboard` below pairs with success.
+    while unsafe { OpenClipboard(ptr::null_mut()) } == 0 {
+        attempt += 1;
+        if attempt == ATTEMPTS {
+            return Err(io::Error::last_os_error());
+        }
+        std::thread::sleep(PAUSE);
+    }
+    let result = store_on_clipboard(&units, bytes);
+    // SAFETY: the clipboard was opened above.
+    unsafe {
+        CloseClipboard();
+    }
+    result
+}
+
+/// Must run while the clipboard is open.
+fn store_on_clipboard(units: &[u16], bytes: usize) -> io::Result<()> {
+    // SAFETY: the caller holds the clipboard open.
+    if unsafe { EmptyClipboard() } == 0 {
+        return Err(io::Error::last_os_error());
+    }
+    // SAFETY: plain allocation; the result is checked next.
+    let memory = unsafe { GlobalAlloc(GMEM_MOVEABLE, bytes) };
+    if memory.is_null() {
+        return Err(io::Error::last_os_error());
+    }
+    // SAFETY: `memory` was just allocated and is not locked yet.
+    let target = unsafe { GlobalLock(memory) };
+    if target.is_null() {
+        let error = io::Error::last_os_error();
+        // SAFETY: nothing else owns `memory` yet.
+        unsafe {
+            GlobalFree(memory);
+        }
+        return Err(error);
+    }
+    // SAFETY: `target` holds `bytes` writable bytes, `units` holds as many
+    // readable ones, and the two cannot overlap.
+    unsafe {
+        ptr::copy_nonoverlapping(units.as_ptr().cast::<u8>(), target.cast::<u8>(), bytes);
+        GlobalUnlock(memory);
+    }
+    // SAFETY: on success the system takes ownership of `memory`.
+    if unsafe { SetClipboardData(u32::from(CF_UNICODETEXT), memory) }.is_null() {
+        let error = io::Error::last_os_error();
+        // SAFETY: the failed call left `memory` with us.
+        unsafe {
+            GlobalFree(memory);
+        }
+        return Err(error);
+    }
+    Ok(())
 }
 
 /// Keeps COM initialized on this thread for as long as it lives.

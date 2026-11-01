@@ -82,7 +82,9 @@ fn in_record_order(chunks: &[Chunk]) -> Vec<&Chunk> {
 /// space counts once however many folders show the file.
 pub fn build_model(output: &ScanOutput, geometry: &Geometry, root_name: &str) -> Model {
     let stats = &output.stats;
-    let mut slots = vec![Slot::default(); stats.records_total as usize];
+    // Sized by what was read, never by what the MFT claims, which a forged
+    // volume could set to billions. Records past the end just get dropped.
+    let mut slots = vec![Slot::default(); output.read_limit()];
     let chunks = in_record_order(&output.chunks);
     for chunk in &chunks {
         for file in &chunk.files {
@@ -457,6 +459,18 @@ mod tests {
                 second.flags(node) & !FLAG_DELETED
             );
         }
+    }
+
+    #[test]
+    fn references_past_the_read_area_are_dropped_without_allocating_for_them() {
+        // An extension record claiming a base near the end of the 32-bit range
+        // would need a table of billions of slots if it were believed.
+        let forged = RecordSpec::extension_of(0xFFFF_FFF0)
+            .attr(AttrSpec::non_resident_data(b"", 4096, 4096));
+        let far_parent = file(0xFFFF_FFF1, 1, "stray.bin", 4096);
+        let model = model_of(&LAYOUT, vec![root_dir(), (30, forged), (31, far_parent)]);
+        let stray = find(&model, "X:\\<Orphaned files>\\stray.bin");
+        assert_eq!(model.allocated(stray), 4096);
     }
 
     #[test]

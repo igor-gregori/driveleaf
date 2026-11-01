@@ -9,7 +9,7 @@ use std::time::{Duration, Instant};
 
 use driveleaf_core::model::{Model, NodeId, ROOT, ScanMode};
 use driveleaf_core::query::{Page, SortKey};
-use driveleaf_core::safety::{Refusal, check_removable};
+use driveleaf_core::safety::{Refusal, check_path, check_removable};
 use driveleaf_core::scanner::{ScanError, scan_drive};
 use driveleaf_ntfs::ScanControl;
 use driveleaf_treemap::{LayoutOptions, Tile, layout_tree};
@@ -486,6 +486,7 @@ fn disk_path(model: &Model, node: NodeId) -> Result<OsString, String> {
     if flags & driveleaf_core::model::FLAG_SYNTHETIC != 0 {
         return Err("not on disk".to_owned());
     }
+    check_path(model, node).map_err(|refusal| refusal.key().to_owned())?;
     Ok(path_from_wtf8(&model.path_bytes(node)))
 }
 
@@ -493,6 +494,12 @@ fn disk_path(model: &Model, node: NodeId) -> Result<OsString, String> {
 pub fn reveal_in_explorer(state: State<'_, AppState>, node: NodeId) -> Result<(), String> {
     let path = state.read(|model| disk_path(model, node))?;
     driveleaf_win::shell::reveal_in_explorer(&path).map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub fn copy_path(state: State<'_, AppState>, node: NodeId) -> Result<(), String> {
+    let path = state.read(|model| disk_path(model, node))?;
+    driveleaf_win::shell::copy_text(&path).map_err(|error| error.to_string())
 }
 
 #[tauri::command]

@@ -181,8 +181,7 @@ export default function App() {
 
   const copyPath = useCallback((row: Row) => {
     void api
-      .getPath(row.id)
-      .then((path) => navigator.clipboard.writeText(path))
+      .copyPath(row.id)
       .then(() => toast.success(t("action.copied")))
       .catch(reportFailure);
   }, []);

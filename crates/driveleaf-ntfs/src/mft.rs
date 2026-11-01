@@ -15,6 +15,8 @@ use crate::source::{AlignedBuffer, BlockSource};
 const MAX_RECORDS: u64 = u32::MAX as u64;
 /// Far above any real `$MFT` attribute list; keeps a hostile size from allocating.
 const MAX_LIST_BYTES: u64 = 1 << 24;
+/// Far above what any real `$MFT` spills into; keeps a hostile list from dragging on.
+const MAX_EXTENSION_RECORDS: usize = 4096;
 
 /// A contiguous piece of the MFT.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -150,6 +152,9 @@ impl MftLayout {
             let wanted = matches!(entry.type_code, ATTR_DATA | ATTR_BITMAP);
             if !wanted || !entry.unnamed || visited.contains(&entry.record) {
                 continue;
+            }
+            if visited.len() == MAX_EXTENSION_RECORDS {
+                return Err(Error::BadMft("too many extension records"));
             }
             visited.push(entry.record);
             let known = extents_from(&attributes.data, cluster)?;
@@ -360,7 +365,12 @@ fn read_mft_bytes<S: BlockSource + ?Sized>(
         let take = ((extent.bytes - within) as usize).min(buffer.len() - done);
         let slice = &mut buffer[done..done + take];
         match extent.volume_offset {
-            Some(volume) => source.read_exact_at(volume + within, slice)?,
+            Some(volume) => {
+                let start = volume
+                    .checked_add(within)
+                    .ok_or(io::ErrorKind::UnexpectedEof)?;
+                source.read_exact_at(start, slice)?;
+            }
             None => slice.fill(0),
         }
         done += take;

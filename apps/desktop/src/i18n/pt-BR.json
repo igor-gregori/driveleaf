@@ -82,5 +82,6 @@
   "treemap.unavailable": "O treemap precisa de WebGL2, que não está disponível aqui. As pastas e listas à esquerda continuam funcionando.",
   "error.title": "Algo deu errado",
   "error.body": "O Driveleaf encontrou um erro do qual não conseguiu se recuperar. Seus arquivos não foram tocados.",
-  "error.reload": "Recarregar"
+  "error.reload": "Recarregar",
+  "refused.unsafeName": "Este item tem um nome que o Windows não consegue usar com segurança."
 }

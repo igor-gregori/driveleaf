@@ -116,6 +116,10 @@ pub struct RawName {
 /// Results of one block.
 #[derive(Debug, Default)]
 pub struct Chunk {
+    /// First record this block covers.
+    pub first_record: u64,
+    /// How many records this block covers.
+    pub records: u32,
     pub files: Vec<RawFile>,
     pub names: Vec<RawName>,
     /// WTF-8 names, addressed by [`RawName`].
@@ -207,6 +211,16 @@ pub struct ScanOutput {
 }
 
 impl ScanOutput {
+    /// One past the last record actually read. Unlike the MFT's own claim about
+    /// its size, this is backed by real data, so it is safe to size tables by.
+    pub fn read_limit(&self) -> usize {
+        self.chunks
+            .iter()
+            .map(|chunk| chunk.first_record + u64::from(chunk.records))
+            .max()
+            .unwrap_or(0) as usize
+    }
+
     /// Heap bytes held by the results.
     pub fn memory_bytes(&self) -> usize {
         self.chunks.iter().map(Chunk::memory_bytes).sum::<usize>()
@@ -367,6 +381,8 @@ impl BlockParser {
             cluster_bytes,
             job,
             chunk: Chunk {
+                first_record: job.first_record,
+                records: job.records,
                 files: Vec::with_capacity(records),
                 names: Vec::with_capacity(records),
                 pool: Vec::with_capacity(records * 24),

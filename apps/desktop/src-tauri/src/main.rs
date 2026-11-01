@@ -7,6 +7,7 @@ use tauri::Manager;
 use tauri::window::{Effect, EffectsBuilder};
 
 fn main() {
+    driveleaf_win::system::restrict_dll_search();
     tauri::Builder::default()
         .manage(commands::AppState::default())
         .setup(|app| {
@@ -33,6 +34,7 @@ fn main() {
             commands::file_types,
             commands::search,
             commands::reveal_in_explorer,
+            commands::copy_path,
             commands::show_properties,
             commands::recycle,
             commands::relaunch_elevated,

@@ -3,6 +3,9 @@
 use std::mem;
 
 use windows_sys::Wdk::System::SystemServices::RtlGetVersion;
+use windows_sys::Win32::System::LibraryLoader::{
+    LOAD_LIBRARY_SEARCH_SYSTEM32, SetDefaultDllDirectories,
+};
 use windows_sys::Win32::System::SystemInformation::OSVERSIONINFOW;
 
 /// The first Windows 11 build, which is also the first with Mica.
@@ -19,6 +22,16 @@ pub fn windows_build() -> u32 {
         info.dwBuildNumber
     } else {
         0
+    }
+}
+
+/// Makes every later DLL load by name come from System32 only. The app may run
+/// elevated from a folder others can write to, such as Downloads, and a DLL
+/// planted next to it must never load. Call this first thing in `main`.
+pub fn restrict_dll_search() {
+    // SAFETY: takes only a flag value and changes this process's search order.
+    unsafe {
+        SetDefaultDllDirectories(LOAD_LIBRARY_SEARCH_SYSTEM32);
     }
 }
 
