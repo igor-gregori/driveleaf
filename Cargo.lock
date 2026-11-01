@@ -727,6 +727,7 @@ version = "0.0.1"
 dependencies = [
  "driveleaf-core",
  "driveleaf-ntfs",
+ "driveleaf-treemap",
  "serde_json",
 ]
 

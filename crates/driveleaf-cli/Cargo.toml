@@ -13,4 +13,5 @@ workspace = true
 [dependencies]
 driveleaf-core.workspace = true
 driveleaf-ntfs = { workspace = true, features = ["synth"] }
+driveleaf-treemap.workspace = true
 serde_json.workspace = true

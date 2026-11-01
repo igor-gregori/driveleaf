@@ -42,12 +42,14 @@ pub fn is_elevated() -> bool {
     succeeded != 0 && elevation.TokenIsElevated != 0
 }
 
-/// Starts this program again through the consent prompt. On success the caller
-/// should exit. Declining the prompt comes back as an error.
-pub fn relaunch_elevated() -> io::Result<()> {
+/// Starts this program again through the consent prompt, with the given command
+/// line. On success the caller should exit. Declining the prompt comes back as
+/// an error.
+pub fn relaunch_elevated(arguments: Option<&str>) -> io::Result<()> {
     let program = std::env::current_exe()?;
     let verb = wide("runas".as_ref());
     let file = wide(program.as_os_str());
+    let parameters = arguments.map(|text| wide(text.as_ref()));
     // SAFETY: both strings are NUL-terminated and outlive the call, and the
     // other arguments may be null.
     let result = unsafe {
@@ -55,7 +57,9 @@ pub fn relaunch_elevated() -> io::Result<()> {
             ptr::null_mut(),
             verb.as_ptr(),
             file.as_ptr(),
-            ptr::null(),
+            parameters
+                .as_ref()
+                .map_or(ptr::null(), |text| text.as_ptr()),
             ptr::null(),
             SW_SHOWNORMAL,
         )

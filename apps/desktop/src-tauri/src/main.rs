@@ -26,6 +26,7 @@ fn main() {
             commands::get_node,
             commands::get_ancestry,
             commands::get_path,
+            commands::count_other_links,
             commands::get_children,
             commands::get_treemap,
             commands::top_files,

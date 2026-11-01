@@ -9,7 +9,7 @@ use std::time::{Duration, Instant};
 
 use driveleaf_core::model::{Model, NodeId, ROOT, ScanMode};
 use driveleaf_core::query::{Page, SortKey};
-use driveleaf_core::safety::check_removable;
+use driveleaf_core::safety::{Refusal, check_removable};
 use driveleaf_core::scanner::{ScanError, scan_drive};
 use driveleaf_ntfs::ScanControl;
 use driveleaf_treemap::{LayoutOptions, Tile, layout_tree};
@@ -27,6 +27,13 @@ const UNKNOWN_NODE: &str = "unknown node";
 pub struct AppState {
     model: RwLock<Option<Model>>,
     running: Mutex<Option<Arc<ScanControl>>>,
+    /// The last ranking of files, which every page of the list reads from.
+    ranked: Mutex<Option<Ranked>>,
+}
+
+struct Ranked {
+    extension: Option<String>,
+    nodes: Vec<NodeId>,
 }
 
 impl AppState {
@@ -65,6 +72,8 @@ pub struct Row {
     has_children: bool,
     /// Share of the parent's space, from 0 to 1.
     share: f64,
+    /// Why this entry cannot go to the Recycle Bin, if it cannot.
+    refusal: Option<&'static str>,
 }
 
 fn row(model: &Model, node: NodeId) -> Row {
@@ -87,6 +96,7 @@ fn row(model: &Model, node: NodeId) -> Row {
         } else {
             model.weight(node) as f64 / whole as f64
         },
+        refusal: check_removable(model, node).err().map(Refusal::key),
     }
 }
 
@@ -143,7 +153,12 @@ pub struct AppInfo {
     version: &'static str,
     elevated: bool,
     mica: bool,
+    /// Drive to scan right away, after reopening with administrator rights.
+    auto_scan: Option<char>,
 }
+
+/// The command line argument that carries `AppInfo::auto_scan`.
+const AUTO_SCAN_ARGUMENT: &str = "--scan";
 
 #[tauri::command]
 pub fn app_info() -> AppInfo {
@@ -151,7 +166,16 @@ pub fn app_info() -> AppInfo {
         version: env!("CARGO_PKG_VERSION"),
         elevated: driveleaf_win::elevation::is_elevated(),
         mica: driveleaf_win::system::supports_mica(),
+        auto_scan: auto_scan_letter(std::env::args()),
     }
+}
+
+fn auto_scan_letter(mut arguments: impl Iterator<Item = String>) -> Option<char> {
+    arguments.find(|argument| argument == AUTO_SCAN_ARGUMENT)?;
+    let value = arguments.next()?;
+    let mut letters = value.chars();
+    let letter = letters.next().filter(char::is_ascii_alphabetic)?;
+    letters.next().is_none().then_some(letter)
 }
 
 #[derive(Clone, Serialize)]
@@ -239,6 +263,7 @@ pub fn start_scan(
             Ok(model) => {
                 let summary = summary_of(&model, started.elapsed().as_secs_f64());
                 *state.model.write().expect("no command panicked") = Some(model);
+                *state.ranked.lock().expect("no command panicked") = None;
                 ScanEvent::Finished { summary }
             }
             Err(ScanError::Cancelled) => ScanEvent::Cancelled,
@@ -282,6 +307,19 @@ pub fn get_path(state: State<'_, AppState>, node: NodeId) -> Result<String, Stri
     state.read(|model| {
         check_node(model, node)?;
         Ok(model.display_path(node))
+    })
+}
+
+/// How many other names a file has. While any remain, removing this one frees
+/// no space, which the confirmation should say.
+#[tauri::command]
+pub fn count_other_links(state: State<'_, AppState>, node: NodeId) -> Result<usize, String> {
+    state.read(|model| {
+        check_node(model, node)?;
+        if model.is_directory(node) {
+            return Ok(0);
+        }
+        Ok(model.other_links(node).len())
     })
 }
 
@@ -330,12 +368,17 @@ pub fn get_treemap(
     node: NodeId,
     width: f32,
     height: f32,
+    max_tiles: usize,
 ) -> Result<Response, String> {
     state.read(|model| {
         check_node(model, node)?;
         let width = width.clamp(1.0, 16_384.0);
         let height = height.clamp(1.0, 16_384.0);
-        let tiles = layout_tree(model, node, width, height, &LayoutOptions::default());
+        let options = LayoutOptions {
+            max_tiles: max_tiles.clamp(1, LayoutOptions::default().max_tiles),
+            ..LayoutOptions::default()
+        };
+        let tiles = layout_tree(model, node, width, height, &options);
         let mut bytes = Vec::with_capacity(tiles.len() * Tile::BYTES);
         for tile in &tiles {
             tile.write_le(&mut bytes);
@@ -376,10 +419,28 @@ fn path_page(model: &Model, page: &Page) -> PathRowPage {
 #[tauri::command]
 pub fn top_files(
     state: State<'_, AppState>,
+    extension: Option<String>,
     offset: usize,
     limit: usize,
 ) -> Result<PathRowPage, String> {
-    state.read(|model| Ok(path_page(model, &model.top_files(offset, limit))))
+    state.read(|model| {
+        let mut ranked = state.ranked.lock().expect("no command panicked");
+        if ranked
+            .as_ref()
+            .is_none_or(|cached| cached.extension != extension)
+        {
+            *ranked = Some(Ranked {
+                nodes: model.rank_files(extension.as_deref()),
+                extension,
+            });
+        }
+        let nodes = &ranked.as_ref().expect("just filled in").nodes;
+        let page = Page {
+            nodes: nodes.iter().skip(offset).take(limit).copied().collect(),
+            total: nodes.len(),
+        };
+        Ok(path_page(model, &page))
+    })
 }
 
 #[derive(Serialize)]
@@ -536,6 +597,9 @@ pub async fn recycle(
                 freed_bytes += target.allocated;
             }
         }
+        if !removed.is_empty() {
+            *state.ranked.lock().expect("no command panicked") = None;
+        }
         Ok(RecycleResult {
             removed,
             freed_bytes,
@@ -549,8 +613,12 @@ pub async fn recycle(
 
 /// Reopens the app with administrator rights, through the Windows prompt.
 #[tauri::command]
-pub fn relaunch_elevated(app: AppHandle) -> Result<(), String> {
-    driveleaf_win::elevation::relaunch_elevated().map_err(|error| error.to_string())?;
+pub fn relaunch_elevated(app: AppHandle, letter: Option<char>) -> Result<(), String> {
+    let arguments = letter
+        .filter(char::is_ascii_alphabetic)
+        .map(|letter| format!("{AUTO_SCAN_ARGUMENT} {letter}"));
+    driveleaf_win::elevation::relaunch_elevated(arguments.as_deref())
+        .map_err(|error| error.to_string())?;
     app.exit(0);
     Ok(())
 }
@@ -558,6 +626,16 @@ pub fn relaunch_elevated(app: AppHandle) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn only_a_plain_drive_letter_starts_a_scan() {
+        let letter = |list: &[&str]| auto_scan_letter(list.iter().map(ToString::to_string));
+        assert_eq!(letter(&["app.exe", "--scan", "C"]), Some('C'));
+        assert_eq!(letter(&["app.exe"]), None);
+        assert_eq!(letter(&["app.exe", "--scan"]), None);
+        assert_eq!(letter(&["app.exe", "--scan", "CD"]), None);
+        assert_eq!(letter(&["app.exe", "--scan", "1"]), None);
+    }
 
     #[test]
     fn file_times_convert_to_unix_milliseconds() {

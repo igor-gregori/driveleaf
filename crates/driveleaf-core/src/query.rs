@@ -95,18 +95,27 @@ impl Model {
         page_of(nodes, offset, limit)
     }
 
-    /// Files in the whole tree, largest first. Hard-linked names beyond the
-    /// first are left out, since they hold no space of their own.
-    pub fn top_files(&self, offset: usize, limit: usize) -> Page {
+    /// Files in the whole tree, largest first, optionally of one extension.
+    /// Hard-linked names beyond the first are left out, since they hold no space
+    /// of their own.
+    pub fn rank_files(&self, only_extension: Option<&str>) -> Vec<NodeId> {
+        let wanted = only_extension.map(str::as_bytes);
         let mut nodes: Vec<NodeId> = (0..self.len() as NodeId)
             .into_par_iter()
             .filter(|&node| {
                 self.flags(node) & (FLAG_DIRECTORY | FLAG_HARD_LINK | FLAG_SYNTHETIC) == 0
                     && self.is_visible(node)
+                    && wanted.is_none_or(|wanted| {
+                        let found = extension(self.name_bytes(node));
+                        found
+                            .as_ref()
+                            .map_or(&b""[..], |(bytes, length)| &bytes[..*length])
+                            == wanted
+                    })
             })
             .collect();
         nodes.par_sort_unstable_by_key(|&node| (std::cmp::Reverse(self.weight(node)), node));
-        page_of(nodes, offset, limit)
+        nodes
     }
 
     /// Space per file extension, largest first.
@@ -272,12 +281,22 @@ mod tests {
     #[test]
     fn top_files_cross_folders_and_skip_links() {
         let model = sample();
-        let page = model.top_files(0, 3);
+        let ranked = model.rank_files(None);
+        let page = page_of(ranked, 0, 3);
         assert_eq!(
             names(&model, &page),
             ["RelatÓRIO.pdf", "Praia.JPG", "casa.jpg"]
         );
         assert_eq!(page.total, 5);
+    }
+
+    #[test]
+    fn the_ranking_can_keep_one_extension() {
+        let model = sample();
+        let jpg = page_of(model.rank_files(Some("jpg")), 0, 10);
+        assert_eq!(names(&model, &jpg), ["Praia.JPG", "casa.jpg"]);
+        let none = page_of(model.rank_files(Some("")), 0, 10);
+        assert_eq!(names(&model, &none), ["README"]);
     }
 
     #[test]

@@ -6,16 +6,19 @@ use std::fs::File;
 use std::io::{BufWriter, Write};
 use std::path::Path;
 use std::process::ExitCode;
+use std::time::Instant;
 
 use driveleaf_core::model::{
     FLAG_DIRECTORY, FLAG_HARD_LINK, FLAG_LINK, FLAG_METAFILE, FLAG_SYNTHETIC, Model, NodeId, ROOT,
 };
+use driveleaf_core::query::SortKey;
 use driveleaf_core::scanner::{ScanError, scan_folder, scan_image as scan_image_tree};
 use driveleaf_ntfs::replay::ReplaySource;
 use driveleaf_ntfs::synth::{ImageLayout, TreeTotals, for_each_generated, write_image};
 use driveleaf_ntfs::{
     BlockSource, Geometry, ImageFile, ScanControl, ScanOptions, ScanOutput, peak_memory_bytes, scan,
 };
+use driveleaf_treemap::{LayoutOptions, layout_tree};
 use serde_json::{Value, json};
 
 const USAGE: &str = "\
@@ -23,6 +26,7 @@ usage:
   driveleaf-cli scan <target> [--format json|csv]  print every entry of a drive, folder,
                                                    image or capture; csv is the default
   driveleaf-cli mft <drive letter or image file>   scan an MFT and print JSON totals
+  driveleaf-cli bench <target>                     time the queries behind the interface
   driveleaf-cli dump <drive letter or image file>  scan an MFT and print every record as TSV
   driveleaf-cli capture <drive letter> <file>      save what a scan reads, to replay it later
   driveleaf-cli synth <image file> <records> [fragments]
@@ -38,6 +42,7 @@ fn main() -> ExitCode {
     {
         ["scan", target] => scan_tree(target, "csv"),
         ["scan", target, "--format", format] => scan_tree(target, format),
+        ["bench", target] => bench(target),
         ["mft", target] => mft(target),
         ["dump", target] => dump(target),
         ["capture", target, path] => capture(target, path),
@@ -254,6 +259,51 @@ fn drive_tree(letter: char, _control: &ScanControl) -> Result<Model, ScanError> 
     Err(ScanError::Failed(format!(
         "{letter}: scanning drives works on Windows only"
     )))
+}
+
+/// Times what the interface asks for, to check it against the navigation target.
+fn bench(target: &str) -> Result<(), String> {
+    fn timed<T>(work: impl FnOnce() -> T) -> (T, f64) {
+        let started = Instant::now();
+        let result = work();
+        (result, started.elapsed().as_secs_f64() * 1000.0)
+    }
+
+    let (model, scan_ms) = timed(|| scan_any(target));
+    let model = model.map_err(|error| error.to_string())?;
+    let biggest_folder = model
+        .raw_children(ROOT)
+        .iter()
+        .copied()
+        .find(|&node| model.is_directory(node))
+        .unwrap_or(ROOT);
+    let options = LayoutOptions::default();
+    let (tiles, layout_root_ms) = timed(|| layout_tree(&model, ROOT, 1600.0, 900.0, &options));
+    let (_, layout_folder_ms) =
+        timed(|| layout_tree(&model, biggest_folder, 1600.0, 900.0, &options));
+    let (_, children_ms) = timed(|| model.list_children(ROOT, SortKey::Name, false, 0, 2000));
+    let (ranked, rank_ms) = timed(|| model.rank_files(None));
+    let (types, types_ms) = timed(|| model.file_types());
+    let (found, search_ms) = timed(|| model.search("log", 100));
+    print_json(&json!({
+        "entries": model.len(),
+        "files": model.files(ROOT),
+        "memory_bytes": model.memory_bytes(),
+        "bytes_per_entry": model.memory_bytes() as f64 / model.len() as f64,
+        "scan_and_build_ms": scan_ms,
+        "treemap_root_ms": layout_root_ms,
+        "treemap_folder_ms": layout_folder_ms,
+        "tiles": tiles.len(),
+        "children_ms": children_ms,
+        "rank_files_ms": rank_ms,
+        "ranked_files": ranked.len(),
+        "file_types_ms": types_ms,
+        "file_types": types.len(),
+        "search_ms": search_ms,
+        "search_hits": found.total,
+        "peak_memory_bytes": peak_memory_bytes(),
+    }));
+    Ok(())
 }
 
 fn kind(model: &Model, node: NodeId) -> &'static str {

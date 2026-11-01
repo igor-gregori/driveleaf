@@ -783,6 +783,44 @@ mod tests {
     }
 
     #[test]
+    fn random_damage_never_panics() {
+        // The parser may run as administrator on anything, so garbage must only
+        // ever cost records. Small xorshift, so a failure can be replayed.
+        let mut state = 0x9E37_79B9_u32;
+        let mut next = move || {
+            state ^= state << 13;
+            state ^= state >> 17;
+            state ^= state << 5;
+            state as usize
+        };
+        let layout = layout(4_096, 3);
+        let mut totals = TreeTotals::default();
+        let clean = image(
+            &layout,
+            generate_tree(layout.record_count, CLUSTER, &mut totals),
+        );
+        let geometry = Geometry::from_boot_sector(&clean[..512]).unwrap();
+        let mft_start = layout.record_offset(1) as usize;
+        let mft_end = layout.record_offset(layout.record_count - 1) as usize;
+        for round in 0..300 {
+            let mut bytes = clean.clone();
+            for _ in 0..200 {
+                let at = mft_start + next() % (mft_end - mft_start);
+                bytes[at] = next() as u8;
+            }
+            // Every few rounds, also hit the MFT's own record and the boot sector.
+            if round % 5 == 0 {
+                let at = layout.record_offset(0) as usize + next() % 1024;
+                bytes[at] = next() as u8;
+                let at = next() % 512;
+                bytes[at] = next() as u8;
+            }
+            let geometry = Geometry::from_boot_sector(&bytes[..512]).unwrap_or(geometry);
+            let _ = scan(&bytes[..], &geometry, &ScanOptions::default(), &control());
+        }
+    }
+
+    #[test]
     fn a_block_never_reads_past_the_records_it_fetched() {
         // The second block starts with free records, so its job is trimmed. The
         // used records right after it belong to the third block, and the slots

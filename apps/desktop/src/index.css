@@ -55,7 +55,7 @@
     --card-foreground: oklch(0.145 0 0);
     --popover: oklch(1 0 0);
     --popover-foreground: oklch(0.145 0 0);
-    --primary: oklch(0.205 0 0);
+    --primary: oklch(0.52 0.13 155);
     --primary-foreground: oklch(0.985 0 0);
     --secondary: oklch(0.97 0 0);
     --secondary-foreground: oklch(0.205 0 0);
@@ -73,6 +73,19 @@
     --chart-4: oklch(0.371 0 0);
     --chart-5: oklch(0.269 0 0);
     --radius: 0.625rem;
+    --treemap-background: #e4e6eb;
+    --treemap-highlight: #ffffff;
+    --treemap-folder-step: -0.035;
+    --treemap-folder: #f3f4f6;
+    --treemap-other: #7c8796;
+    --treemap-document: #2f76e0;
+    --treemap-image: #17a673;
+    --treemap-video: #d94a33;
+    --treemap-audio: #8c5ad6;
+    --treemap-archive: #d48f12;
+    --treemap-code: #0e9fb5;
+    --treemap-application: #d9558f;
+    --treemap-system: #5f6f8a;
     --sidebar: oklch(0.985 0 0);
     --sidebar-foreground: oklch(0.145 0 0);
     --sidebar-primary: oklch(0.205 0 0);
@@ -84,14 +97,28 @@
 }
 
 .dark {
+    color-scheme: dark;
+    --treemap-background: #131417;
+    --treemap-highlight: #ffffff;
+    --treemap-folder-step: 0.09;
+    --treemap-folder: #24262c;
+    --treemap-other: #6d7888;
+    --treemap-document: #4f8ff7;
+    --treemap-image: #36bd8c;
+    --treemap-video: #e6654f;
+    --treemap-audio: #ab7cf0;
+    --treemap-archive: #e7a93b;
+    --treemap-code: #33b6ca;
+    --treemap-application: #ec7bab;
+    --treemap-system: #7f8fab;
     --background: oklch(0.145 0 0);
     --foreground: oklch(0.985 0 0);
     --card: oklch(0.205 0 0);
     --card-foreground: oklch(0.985 0 0);
     --popover: oklch(0.205 0 0);
     --popover-foreground: oklch(0.985 0 0);
-    --primary: oklch(0.922 0 0);
-    --primary-foreground: oklch(0.205 0 0);
+    --primary: oklch(0.72 0.15 155);
+    --primary-foreground: oklch(0.2 0.03 155);
     --secondary: oklch(0.269 0 0);
     --secondary-foreground: oklch(0.985 0 0);
     --muted: oklch(0.269 0 0);
@@ -127,4 +154,17 @@
   html {
     @apply font-sans;
     }
+}
+/* With Mica the window itself shows through; without it the app stays opaque. */
+.app-surface {
+    background: var(--background);
+}
+
+html.mica,
+html.mica body {
+    background: transparent;
+}
+
+html.mica .app-surface {
+    background: color-mix(in oklab, var(--background) 72%, transparent);
 }
