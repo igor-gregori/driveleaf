@@ -32,10 +32,16 @@ function Invoke-Json([string]$Exe, [string[]]$Arguments) {
 $all = New-Object System.Collections.ArrayList
 for ($run = 1; $run -le $Runs; $run++) {
     Write-Host "run $run of $Runs"
-    [void]$all.Add((Invoke-Json $cli @('mft', "${Drive}:")))
+    # ntfs-reader goes first so a one-off cost of the first run shows on it.
     [void]$all.Add((Invoke-Json $compare @('ntfs-reader', $device)))
+    [void]$all.Add((Invoke-Json $cli @('mft', "${Drive}:")))
     [void]$all.Add((Invoke-Json $compare @('ntfs-reader-scan', $device)))
 }
+
+# A capture of what the scan reads lets the tree be tested without elevation.
+# It holds every file name on the volume and stays on this machine.
+$capture = Join-Path $PSScriptRoot "${Drive}-drive.dlmft"
+& $cli capture "${Drive}:" $capture | Out-Null
 
 $volume = Get-Volume -DriveLetter $Drive
 $summary = [ordered]@{

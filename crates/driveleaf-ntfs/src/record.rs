@@ -277,9 +277,21 @@ impl<'a> FileName<'a> {
     }
 }
 
-/// Decoded `$STANDARD_INFORMATION` file attribute flags.
-pub fn standard_attributes(value: &[u8]) -> Option<u32> {
-    le_u32(value, 0x20)
+/// Decoded `$STANDARD_INFORMATION` value.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct StandardInfo {
+    /// Last modification, in 100 ns ticks since 1601.
+    pub modified: u64,
+    pub attributes: u32,
+}
+
+impl StandardInfo {
+    pub fn parse(value: &[u8]) -> Option<Self> {
+        Some(Self {
+            modified: le_u64(value, 0x08)?,
+            attributes: le_u32(value, 0x20)?,
+        })
+    }
 }
 
 /// One entry of an `$ATTRIBUTE_LIST`.

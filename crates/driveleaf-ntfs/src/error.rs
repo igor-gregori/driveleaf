@@ -11,6 +11,8 @@ pub enum Error {
     NotNtfs(&'static str),
     /// The MFT's own record could not be understood.
     BadMft(&'static str),
+    /// Stopped through [`crate::ScanControl::cancel`].
+    Cancelled,
 }
 
 impl fmt::Display for Error {
@@ -19,6 +21,7 @@ impl fmt::Display for Error {
             Error::Io(error) => write!(f, "volume read failed: {error}"),
             Error::NotNtfs(reason) => write!(f, "not an NTFS volume: {reason}"),
             Error::BadMft(reason) => write!(f, "unreadable MFT: {reason}"),
+            Error::Cancelled => write!(f, "scan cancelled"),
         }
     }
 }

@@ -1,10 +1,11 @@
-//! The scan itself. One thread reads the MFT in large blocks, the rayon pool
+//! The scan itself. Reader threads fetch the MFT in large blocks, the rayon pool
 //! parses them, and every block yields one compact chunk of results.
 //!
 //! Extension records need no `$ATTRIBUTE_LIST` lookup here: since every record
 //! gets visited anyway, each one simply credits what it holds to its base record.
 
-use std::sync::{Mutex, mpsc};
+use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
+use std::sync::{Condvar, Mutex};
 use std::time::{Duration, Instant};
 
 use crate::error::Error;
@@ -13,7 +14,7 @@ use crate::mft::{MftLayout, ReadJob};
 use crate::names::push_wtf8;
 use crate::record::{
     ATTR_DATA, ATTR_FILE_NAME, ATTR_STANDARD_INFORMATION, AttributeBody, Attributes, FileName,
-    NAMESPACE_DOS, NonResident, RecordHeader, apply_fixups, standard_attributes,
+    NAMESPACE_DOS, NonResident, RecordError, RecordHeader, StandardInfo, apply_fixups,
 };
 use crate::runs::Runs;
 use crate::source::{AlignedBuffer, BlockSource};
@@ -31,8 +32,10 @@ pub const RAW_EXTENSION: u8 = 0x02;
 pub struct ScanOptions {
     /// Largest single read.
     pub block_bytes: usize,
-    /// Blocks in flight between the reader and the parsers.
+    /// Blocks in flight between the readers and the parsers.
     pub buffers: usize,
+    /// Parallel reads. One suits a spinning disk; flash gains from several.
+    pub readers: usize,
 }
 
 impl Default for ScanOptions {
@@ -40,7 +43,36 @@ impl Default for ScanOptions {
         Self {
             block_bytes: 4 << 20,
             buffers: (rayon::current_num_threads() * 2).max(4),
+            readers: 1,
         }
+    }
+}
+
+/// Shared with whoever started a scan, to follow it or stop it.
+#[derive(Debug, Default)]
+pub struct ScanControl {
+    cancelled: AtomicBool,
+    records_done: AtomicU64,
+    records_total: AtomicU64,
+}
+
+impl ScanControl {
+    /// Asks the scan to stop. It returns [`Error::Cancelled`] soon after.
+    pub fn cancel(&self) {
+        self.cancelled.store(true, Ordering::Relaxed);
+    }
+
+    pub fn is_cancelled(&self) -> bool {
+        self.cancelled.load(Ordering::Relaxed)
+    }
+
+    /// Records parsed so far and records to parse. The total is zero until the
+    /// MFT has been located.
+    pub fn progress(&self) -> (u64, u64) {
+        (
+            self.records_done.load(Ordering::Relaxed),
+            self.records_total.load(Ordering::Relaxed),
+        )
     }
 }
 
@@ -53,6 +85,8 @@ pub struct RawFile {
     pub link_count: u16,
     /// `$STANDARD_INFORMATION` file attribute flags.
     pub attributes: u32,
+    /// Last modification, in 100 ns ticks since 1601.
+    pub modified: u64,
     /// [`RAW_DIRECTORY`] and [`RAW_EXTENSION`].
     pub flags: u8,
     /// Size of the unnamed data stream.
@@ -114,8 +148,15 @@ pub struct ScanStats {
     pub logical_bytes: u64,
     pub stream_bytes: u64,
     pub allocated_bytes: u64,
-    /// Records the bitmap marks as used but that failed to decode.
+    /// Records the bitmap marks as used but that failed to decode: the sum of
+    /// the three counters below.
     pub corrupt_records: u64,
+    /// Slots without a `FILE` signature.
+    pub bad_signature_records: u64,
+    /// Slots whose update sequence does not match: torn or stale writes.
+    pub torn_records: u64,
+    /// Slots with an inconsistent header or fixup array.
+    pub bad_header_records: u64,
     /// Records that decoded only in part.
     pub malformed_records: u64,
     pub unreadable_blocks: u64,
@@ -136,6 +177,9 @@ impl ScanStats {
         self.stream_bytes = self.stream_bytes.saturating_add(other.stream_bytes);
         self.allocated_bytes = self.allocated_bytes.saturating_add(other.allocated_bytes);
         self.corrupt_records += other.corrupt_records;
+        self.bad_signature_records += other.bad_signature_records;
+        self.torn_records += other.torn_records;
+        self.bad_header_records += other.bad_header_records;
         self.malformed_records += other.malformed_records;
     }
 }
@@ -147,8 +191,13 @@ pub struct ScanOutput {
     pub stats: ScanStats,
     pub mft_extents: usize,
     pub read_jobs: usize,
-    /// Time the reader spent inside read calls.
+    /// Time spent locating the MFT, before the first block.
+    pub layout_time: Duration,
+    /// Time inside read calls, summed over the readers.
     pub read_time: Duration,
+    /// Time readers waited for a free buffer, summed over the readers. Long
+    /// waits mean the parsers are the bottleneck.
+    pub wait_time: Duration,
     pub total_time: Duration,
 }
 
@@ -160,62 +209,127 @@ impl ScanOutput {
     }
 }
 
+/// Block buffers shared by the readers and the parsers.
+struct BufferPool {
+    free: Mutex<Vec<AlignedBuffer>>,
+    returned: Condvar,
+}
+
+impl BufferPool {
+    fn new(count: usize, block_bytes: usize) -> Self {
+        let free = (0..count)
+            .map(|_| AlignedBuffer::new(block_bytes))
+            .collect();
+        Self {
+            free: Mutex::new(free),
+            returned: Condvar::new(),
+        }
+    }
+
+    fn take(&self) -> AlignedBuffer {
+        let mut free = self.free.lock().expect("no parser panicked");
+        loop {
+            if let Some(buffer) = free.pop() {
+                return buffer;
+            }
+            free = self.returned.wait(free).expect("no parser panicked");
+        }
+    }
+
+    fn give(&self, buffer: AlignedBuffer) {
+        self.free.lock().expect("no parser panicked").push(buffer);
+        self.returned.notify_one();
+    }
+}
+
+#[derive(Default)]
+struct ReadTally {
+    read_nanos: AtomicU64,
+    wait_nanos: AtomicU64,
+    unreadable_blocks: AtomicU64,
+    bytes_read: AtomicU64,
+}
+
+fn add_elapsed(counter: &AtomicU64, since: Instant) {
+    counter.fetch_add(since.elapsed().as_nanos() as u64, Ordering::Relaxed);
+}
+
 /// Reads and parses the whole MFT of a volume.
 pub fn scan<S: BlockSource + ?Sized>(
     source: &S,
     geometry: &Geometry,
     options: &ScanOptions,
+    control: &ScanControl,
 ) -> Result<ScanOutput, Error> {
     let started = Instant::now();
     let layout = MftLayout::load(source, geometry)?;
+    let layout_time = started.elapsed();
+    control
+        .records_total
+        .store(layout.used_record_count(), Ordering::Relaxed);
+
     let record_bytes = geometry.bytes_per_record as usize;
     let block_records = (options.block_bytes / record_bytes).max(1);
     let block_bytes = block_records * record_bytes;
     let jobs = layout.plan_reads(block_records as u64);
-
-    let (free_sender, free_buffers) = mpsc::channel();
-    for _ in 0..options.buffers.max(1) {
-        free_sender
-            .send(AlignedBuffer::new(block_bytes))
-            .expect("the receiver is alive");
-    }
-
+    let readers = options.readers.max(1);
+    let pool = BufferPool::new(options.buffers.max(readers), block_bytes);
+    let next_job = AtomicUsize::new(0);
+    let tally = ReadTally::default();
     let finished = Mutex::new(Vec::with_capacity(jobs.len()));
-    let mut read_time = Duration::ZERO;
-    let mut unreadable_blocks = 0;
-    let mut bytes_read = 0;
 
     rayon::in_place_scope(|scope| {
-        for &job in &jobs {
-            let mut buffer: AlignedBuffer = free_buffers.recv().expect("a sender is alive");
-            let before = Instant::now();
-            let result = layout.read_job(source, job, buffer.as_mut_slice());
-            read_time += before.elapsed();
-            if result.is_err() {
-                unreadable_blocks += 1;
-                free_sender.send(buffer).expect("the receiver is alive");
-                continue;
+        let reader = || {
+            while !control.is_cancelled() {
+                let Some(&job) = jobs.get(next_job.fetch_add(1, Ordering::Relaxed)) else {
+                    break;
+                };
+                let before_wait = Instant::now();
+                let mut buffer = pool.take();
+                add_elapsed(&tally.wait_nanos, before_wait);
+
+                let before_read = Instant::now();
+                let result = layout.read_job(source, job, buffer.as_mut_slice());
+                add_elapsed(&tally.read_nanos, before_read);
+                if result.is_err() {
+                    tally.unreadable_blocks.fetch_add(1, Ordering::Relaxed);
+                    pool.give(buffer);
+                    continue;
+                }
+                let bytes = u64::from(job.records) * record_bytes as u64;
+                tally.bytes_read.fetch_add(bytes, Ordering::Relaxed);
+
+                let (layout, finished, pool) = (&layout, &finished, &pool);
+                scope.spawn(move |_| {
+                    let mut parser = BlockParser::new(u64::from(geometry.bytes_per_cluster), job);
+                    parser.parse(buffer.as_mut_slice(), layout, record_bytes);
+                    control
+                        .records_done
+                        .fetch_add(parser.stats.records_parsed, Ordering::Relaxed);
+                    finished
+                        .lock()
+                        .expect("no parser panicked")
+                        .push((parser.chunk, parser.stats));
+                    pool.give(buffer);
+                });
             }
-            bytes_read += u64::from(job.records) * record_bytes as u64;
-            let free_sender = free_sender.clone();
-            let (layout, finished) = (&layout, &finished);
-            scope.spawn(move |_| {
-                let mut parser = BlockParser::new(u64::from(geometry.bytes_per_cluster), job);
-                parser.parse(buffer.as_mut_slice(), layout, record_bytes);
-                finished
-                    .lock()
-                    .expect("no parser panicked")
-                    .push((parser.chunk, parser.stats));
-                let _ = free_sender.send(buffer);
-            });
-        }
+        };
+        std::thread::scope(|threads| {
+            for _ in 1..readers {
+                threads.spawn(&reader);
+            }
+            reader();
+        });
     });
+    if control.is_cancelled() {
+        return Err(Error::Cancelled);
+    }
 
     let mut chunks = Vec::with_capacity(jobs.len());
     let mut stats = ScanStats {
         records_total: layout.record_count(),
-        unreadable_blocks,
-        bytes_read,
+        unreadable_blocks: tally.unreadable_blocks.into_inner(),
+        bytes_read: tally.bytes_read.into_inner(),
         ..ScanStats::default()
     };
     for (chunk, block_stats) in finished.into_inner().expect("no parser panicked") {
@@ -227,14 +341,16 @@ pub fn scan<S: BlockSource + ?Sized>(
         stats,
         mft_extents: layout.extent_count(),
         read_jobs: jobs.len(),
-        read_time,
+        layout_time,
+        read_time: Duration::from_nanos(tally.read_nanos.into_inner()),
+        wait_time: Duration::from_nanos(tally.wait_nanos.into_inner()),
         total_time: started.elapsed(),
     })
 }
 
 struct BlockParser {
     cluster_bytes: u64,
-    first_record: u64,
+    job: ReadJob,
     chunk: Chunk,
     stats: ScanStats,
 }
@@ -244,7 +360,7 @@ impl BlockParser {
         let records = job.records as usize;
         Self {
             cluster_bytes,
-            first_record: job.first_record,
+            job,
             chunk: Chunk {
                 files: Vec::with_capacity(records),
                 names: Vec::with_capacity(records),
@@ -254,9 +370,12 @@ impl BlockParser {
         }
     }
 
+    /// Parses the records this block's job read. Buffers are reused, so whatever
+    /// lies past them is left over from an earlier block.
     fn parse(&mut self, block: &mut [u8], layout: &MftLayout, record_bytes: usize) {
-        for (index, slot) in block.chunks_exact_mut(record_bytes).enumerate() {
-            let number = self.first_record + index as u64;
+        let read = self.job.records as usize * record_bytes;
+        for (index, slot) in block[..read].chunks_exact_mut(record_bytes).enumerate() {
+            let number = self.job.first_record + index as u64;
             if !layout.is_free(number) {
                 self.stats.records_parsed += 1;
                 self.parse_record(slot, number);
@@ -265,13 +384,16 @@ impl BlockParser {
     }
 
     fn parse_record(&mut self, slot: &mut [u8], number: u64) {
-        if apply_fixups(slot).is_err() {
-            self.stats.corrupt_records += 1;
+        if let Err(error) = apply_fixups(slot) {
+            self.count_corrupt(error);
             return;
         }
-        let Ok(header) = RecordHeader::parse(slot) else {
-            self.stats.corrupt_records += 1;
-            return;
+        let header = match RecordHeader::parse(slot) {
+            Ok(header) => header,
+            Err(error) => {
+                self.count_corrupt(error);
+                return;
+            }
         };
         if !header.in_use() {
             self.stats.records_unused += 1;
@@ -284,7 +406,7 @@ impl BlockParser {
             number
         };
         let Ok(record) = u32::try_from(owner) else {
-            self.stats.corrupt_records += 1;
+            self.count_corrupt(RecordError::BadHeader);
             return;
         };
 
@@ -293,6 +415,7 @@ impl BlockParser {
             sequence: header.sequence,
             link_count: header.link_count,
             attributes: 0,
+            modified: 0,
             flags: 0,
             logical_size: 0,
             stream_size: 0,
@@ -306,7 +429,10 @@ impl BlockParser {
                 AttributeBody::Resident(value) => match attribute.type_code {
                     ATTR_FILE_NAME => damaged |= !self.add_name(record, value),
                     ATTR_STANDARD_INFORMATION => {
-                        file.attributes = standard_attributes(value).unwrap_or(0);
+                        if let Some(info) = StandardInfo::parse(value) {
+                            file.attributes = info.attributes;
+                            file.modified = info.modified;
+                        }
                     }
                     ATTR_DATA => add_stream(&mut file, unnamed, value.len() as u64),
                     _ => {}
@@ -345,6 +471,17 @@ impl BlockParser {
         self.stats.stream_bytes = self.stats.stream_bytes.saturating_add(file.stream_size);
         self.stats.allocated_bytes = self.stats.allocated_bytes.saturating_add(file.allocated);
         self.chunk.files.push(file);
+    }
+
+    fn count_corrupt(&mut self, error: RecordError) {
+        self.stats.corrupt_records += 1;
+        match error {
+            RecordError::BadSignature => self.stats.bad_signature_records += 1,
+            RecordError::TornWrite => self.stats.torn_records += 1,
+            RecordError::BadFixupArray | RecordError::BadHeader => {
+                self.stats.bad_header_records += 1;
+            }
+        }
     }
 
     /// Records a name. Returns false when the attribute is unusable.
@@ -419,9 +556,13 @@ mod tests {
         out.into_inner()
     }
 
+    fn control() -> ScanControl {
+        ScanControl::default()
+    }
+
     fn run(bytes: &[u8]) -> ScanOutput {
         let geometry = Geometry::from_boot_sector(&bytes[..512]).unwrap();
-        scan(bytes, &geometry, &ScanOptions::default()).unwrap()
+        scan(bytes, &geometry, &ScanOptions::default(), &control()).unwrap()
     }
 
     /// The MFT's own record, which every image contains.
@@ -616,8 +757,11 @@ mod tests {
         let options = ScanOptions {
             block_bytes: 1024,
             buffers: 2,
+            readers: 1,
         };
-        let small = scan(&bytes[..], &geometry, &options).unwrap().stats;
+        let small = scan(&bytes[..], &geometry, &options, &control())
+            .unwrap()
+            .stats;
         let large = run(&bytes).stats;
         // Smaller blocks trim free records more tightly, so they read less.
         assert!(small.bytes_read <= large.bytes_read);
@@ -631,6 +775,105 @@ mod tests {
                 ..large
             }
         );
+    }
+
+    #[test]
+    fn a_block_never_reads_past_the_records_it_fetched() {
+        // The second block starts with free records, so its job is trimmed. The
+        // used records right after it belong to the third block, and the slots
+        // that would map to them hold whatever the buffer had before.
+        let layout = layout(8_192, 1);
+        let file =
+            |name: String| RecordSpec::file(1).attr(AttrSpec::name(ROOT_RECORD, 5, 3, &name));
+        let mut records = vec![(1030, file("alone".to_owned()))];
+        records.extend((2048..2053).map(|number| (number, file(format!("f{number}")))));
+        let bytes = image(&layout, records);
+        let geometry = Geometry::from_boot_sector(&bytes[..512]).unwrap();
+        let options = ScanOptions {
+            block_bytes: 1 << 20,
+            buffers: 1,
+            readers: 1,
+        };
+        let stats = scan(&bytes[..], &geometry, &options, &control())
+            .unwrap()
+            .stats;
+        assert_eq!(stats.corrupt_records, 0);
+        assert_eq!(stats.records_parsed, 7);
+        assert_eq!(stats.files, 7);
+    }
+
+    #[test]
+    fn corrupt_records_say_why() {
+        let layout = layout(256, 1);
+        let file = |name: &str| RecordSpec::file(1).attr(AttrSpec::name(ROOT_RECORD, 5, 3, name));
+        let records = vec![(30, file("a")), (31, file("b")), (32, file("c"))];
+        let mut bytes = image(&layout, records);
+        let torn = layout.record_offset(30) as usize;
+        bytes[torn + 510] ^= 0xFF;
+        let empty = layout.record_offset(31) as usize;
+        bytes[empty..empty + 1024].fill(0);
+        let header = layout.record_offset(32) as usize;
+        bytes[header + 0x14..header + 0x16].copy_from_slice(&4_u16.to_le_bytes());
+
+        let stats = run(&bytes).stats;
+        assert_eq!(stats.torn_records, 1);
+        assert_eq!(stats.bad_signature_records, 1);
+        assert_eq!(stats.bad_header_records, 1);
+        assert_eq!(stats.corrupt_records, 3);
+    }
+
+    #[test]
+    fn parallel_readers_find_the_same_things() {
+        let layout = layout(20_000, 9);
+        let mut totals = TreeTotals::default();
+        let bytes = image(
+            &layout,
+            generate_tree(layout.record_count, CLUSTER, &mut totals),
+        );
+        let geometry = Geometry::from_boot_sector(&bytes[..512]).unwrap();
+        let options = ScanOptions {
+            block_bytes: 1 << 16,
+            buffers: 8,
+            readers: 4,
+        };
+        let parallel = scan(&bytes[..], &geometry, &options, &control())
+            .unwrap()
+            .stats;
+        let single = ScanOptions {
+            readers: 1,
+            ..options
+        };
+        let serial = scan(&bytes[..], &geometry, &single, &control())
+            .unwrap()
+            .stats;
+        assert_eq!(parallel, serial);
+    }
+
+    #[test]
+    fn a_cancelled_scan_stops_with_an_error() {
+        let layout = layout(8_192, 1);
+        let bytes = image(&layout, Vec::new());
+        let geometry = Geometry::from_boot_sector(&bytes[..512]).unwrap();
+        let control = control();
+        control.cancel();
+        let result = scan(&bytes[..], &geometry, &ScanOptions::default(), &control);
+        assert!(matches!(result, Err(Error::Cancelled)));
+    }
+
+    #[test]
+    fn progress_reaches_the_total() {
+        let layout = layout(8_192, 2);
+        let mut totals = TreeTotals::default();
+        let bytes = image(
+            &layout,
+            generate_tree(layout.record_count, CLUSTER, &mut totals),
+        );
+        let geometry = Geometry::from_boot_sector(&bytes[..512]).unwrap();
+        let control = control();
+        let output = scan(&bytes[..], &geometry, &ScanOptions::default(), &control).unwrap();
+        let (done, total) = control.progress();
+        assert_eq!(done, total);
+        assert_eq!(done, output.stats.records_parsed);
     }
 
     #[test]
@@ -654,9 +897,10 @@ mod tests {
         let options = ScanOptions {
             block_bytes: 1 << 20,
             buffers: 2,
+            readers: 1,
         };
         let cutoff = layout.record_offset(4096);
-        let output = scan(&Failing(&bytes, cutoff), &geometry, &options).unwrap();
+        let output = scan(&Failing(&bytes, cutoff), &geometry, &options, &control()).unwrap();
         assert!(output.stats.unreadable_blocks > 0);
         assert!(output.stats.files > 0 && output.stats.files < totals.files);
     }

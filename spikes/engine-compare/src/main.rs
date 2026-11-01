@@ -164,6 +164,7 @@ mod ntfs_reader {
         while let Some(chunk) = scan.next_chunk().map_err(|error| error.to_string())? {
             add(chunk.files(), &mut cache, &mut totals);
         }
+        totals.errors = scan.corrupt_records();
         report(
             "ntfs-reader-scan",
             started.elapsed(),

@@ -185,6 +185,16 @@ impl MftLayout {
         self.record_count
     }
 
+    /// Records the bitmap marks as used, which is what a scan parses.
+    pub(crate) fn used_record_count(&self) -> u64 {
+        match &self.bitmap {
+            Some(_) => (0..self.record_count)
+                .filter(|&record| !self.is_free(record))
+                .count() as u64,
+            None => self.record_count,
+        }
+    }
+
     pub(crate) fn extent_count(&self) -> usize {
         self.extents.len()
     }
