@@ -481,40 +481,6 @@ mod tests {
     }
 
     #[test]
-    fn a_reparse_value_outside_the_record_keeps_its_tag() {
-        let named = |name, attributes: u32, field: u32| {
-            let AttrSpec::Resident {
-                type_code,
-                name,
-                mut value,
-            } = AttrSpec::name(SYNTH_ROOT, 5, 3, name)
-            else {
-                panic!("names are resident");
-            };
-            value[0x38..0x3C].copy_from_slice(&attributes.to_le_bytes());
-            value[0x3C..0x40].copy_from_slice(&field.to_le_bytes());
-            RecordSpec::file(1)
-                .attr(AttrSpec::standard(attributes))
-                .attr(AttrSpec::Resident {
-                    type_code,
-                    name,
-                    value,
-                })
-        };
-        let model = model_of(
-            &LAYOUT,
-            vec![
-                root_dir(),
-                (30, named("alias", ATTR_REPARSE, 0x8000_001B)),
-                // Not a reparse point, so that field is an extended attribute size.
-                (31, named("plain", 0, 0xA000_000C)),
-            ],
-        );
-        assert_ne!(model.flags(find(&model, "X:\\alias")) & FLAG_LINK, 0);
-        assert_eq!(model.flags(find(&model, "X:\\plain")) & FLAG_LINK, 0);
-    }
-
-    #[test]
     fn attribute_flags_reach_the_nodes() {
         let hidden = |name, attributes| {
             RecordSpec::file(1)

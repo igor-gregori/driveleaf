@@ -67,6 +67,9 @@ folder API. 472,215 files appear in both.
   MFT also adds up every stream of a file, and the listing only the main one.
 - The MFT holds 56,504 more paths, nearly all in folders the walk had no permission
   to open, such as `WindowsApps` and parts of `System32`.
+- A reparse value too long for its record is stored outside the MFT, where a scan
+  does not read, and `$FILE_NAME` does not repeat the tag. Two records on this drive
+  are like that, so they show as plain files instead of links, with the right size.
 
 ## Speed against the candidate crates
 
