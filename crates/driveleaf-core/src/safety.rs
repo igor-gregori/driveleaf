@@ -169,7 +169,7 @@ mod tests {
         let app = tree.add(programs, b"Some App", folder());
         tree.add(app, b"app.exe", file());
         let users = tree.add(ROOT, b"Users", folder());
-        let profile = tree.add(users, b"igor", folder());
+        let profile = tree.add(users, b"maria", folder());
         let downloads = tree.add(profile, b"Downloads", folder());
         tree.add(downloads, b"setup.exe", file());
         let data = tree.add(ROOT, b"Dados", folder());
@@ -208,8 +208,8 @@ mod tests {
     #[test]
     fn ordinary_files_and_folders_are_removable() {
         let tree = tree();
-        assert_eq!(tree.check("C:\\Users\\igor\\Downloads\\setup.exe"), Ok(()));
-        assert_eq!(tree.check("C:\\Users\\igor\\Downloads"), Ok(()));
+        assert_eq!(tree.check("C:\\Users\\maria\\Downloads\\setup.exe"), Ok(()));
+        assert_eq!(tree.check("C:\\Users\\maria\\Downloads"), Ok(()));
         assert_eq!(tree.check("C:\\Dados"), Ok(()));
         assert_eq!(tree.check("C:\\Dados\\filme.mkv"), Ok(()));
         assert_eq!(tree.check("C:\\Program Files (x86)\\Some App"), Ok(()));
@@ -245,7 +245,7 @@ mod tests {
             Err(Refusal::Protected)
         );
         assert_eq!(tree.check("C:\\Users"), Err(Refusal::Protected));
-        assert_eq!(tree.check("C:\\Users\\igor"), Err(Refusal::Protected));
+        assert_eq!(tree.check("C:\\Users\\maria"), Err(Refusal::Protected));
     }
 
     #[test]

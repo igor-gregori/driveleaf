@@ -7,6 +7,8 @@ explicit approval. Do the steps in order.
 
 - [ ] Confirm the name. The trademark screening in `benchmarks.md` was clean, but
       it is not legal advice.
+- [ ] Check the author name and email on the commits, which become public with the
+      first push.
 - [ ] Create the GitHub organization and repository, and push `main`.
 - [ ] Add `repository` and `homepage` to `[workspace.package]`, plus `readme`,
       `keywords` and `categories` to each crate that gets published.
