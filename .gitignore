@@ -1,0 +1,22 @@
+# Rust
+/target/
+
+# Node
+node_modules/
+dist/
+
+# Tauri
+apps/desktop/src-tauri/gen/
+.xwin-cache/
+
+# Local outputs
+/out/
+*.img
+*.vhd
+*.vhdx
+
+# Editors and OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
