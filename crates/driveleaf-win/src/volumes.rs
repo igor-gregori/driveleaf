@@ -102,3 +102,21 @@ fn volume_info(letter: char) -> Option<VolumeInfo> {
         free_bytes,
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_system_drive_is_listed() {
+        let drive = std::env::var("SystemDrive").unwrap();
+        let letter = drive.chars().next().unwrap();
+        let volumes = list_volumes();
+        let system = volumes
+            .iter()
+            .find(|volume| volume.letter == letter)
+            .unwrap();
+        assert!(system.total_bytes > system.free_bytes);
+        assert!(!system.file_system.is_empty());
+    }
+}

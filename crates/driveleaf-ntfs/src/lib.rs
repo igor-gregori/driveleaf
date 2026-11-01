@@ -7,6 +7,8 @@
 #![deny(unsafe_code)]
 
 mod bytes;
+#[cfg(any(test, feature = "synth"))]
+pub mod demo;
 mod error;
 mod geometry;
 mod mft;

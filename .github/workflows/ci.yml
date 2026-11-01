@@ -27,7 +27,7 @@ jobs:
       - run: cargo test
 
   ntfs-fixture:
-    name: Parser against a real NTFS volume
+    name: Parser against a volume from ntfs-3g
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -37,6 +37,31 @@ jobs:
       # The fixture mounts inside a private user namespace.
       - run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
       - run: bash fixtures/ntfs3g/run.sh
+
+  windows-fixture:
+    name: Parser against a volume from Windows
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - shell: pwsh
+        run: ./fixtures/build.ps1 -OutDir fixtures
+      - run: cargo test -p driveleaf-core --test windows_fixture
+
+  fuzz:
+    name: Fuzz the parser
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [mft_record, data_runs, volume]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo +nightly install cargo-fuzz --locked
+      - run: cargo +nightly fuzz run ${{ matrix.target }} -- -max_total_time=120
 
   frontend:
     name: Frontend

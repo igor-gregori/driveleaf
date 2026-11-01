@@ -177,11 +177,10 @@ pub fn walk(
     Some(state.tree.finish(ORPHANS_NAME, summary))
 }
 
-#[cfg(all(test, unix))]
+#[cfg(test)]
 mod tests {
     use super::*;
     use std::fs;
-    use std::os::unix::fs::symlink;
 
     fn sandbox(name: &str) -> PathBuf {
         let root = std::env::temp_dir().join(format!("driveleaf-{name}-{}", std::process::id()));
@@ -219,10 +218,11 @@ mod tests {
         );
     }
 
+    #[cfg(unix)]
     #[test]
     fn links_are_listed_but_not_followed() {
         let root = sandbox("links");
-        symlink(root.join("a"), root.join("shortcut")).unwrap();
+        std::os::unix::fs::symlink(root.join("a"), root.join("shortcut")).unwrap();
         let model = run(&root, &ScanControl::default()).unwrap();
         fs::remove_dir_all(&root).unwrap();
         assert_eq!(

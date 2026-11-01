@@ -39,3 +39,13 @@ pub fn restrict_dll_search() {
 pub fn supports_mica() -> bool {
     windows_build() >= WINDOWS_11_BUILD
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_build_number_is_a_real_one() {
+        assert!(windows_build() > 10_000);
+    }
+}

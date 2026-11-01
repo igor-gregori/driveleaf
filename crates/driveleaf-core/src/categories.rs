@@ -94,8 +94,13 @@ pub fn categorize(name: &[u8]) -> Category {
         | b"bat" | b"cmd" | b"lua" | b"swift" | b"dart" | b"vue" | b"pdb" | b"map" | b"lock" => {
             Category::Code
         }
+        // Besides programs, this covers the large data files they depend on, such
+        // as game archives and AI models.
         b"exe" | b"msi" | b"msix" | b"appx" | b"apk" | b"jar" | b"deb" | b"rpm" | b"com"
-        | b"scr" | b"pak" | b"unity3d" | b"asar" | b"bundle" => Category::Application,
+        | b"scr" | b"pak" | b"unity3d" | b"asar" | b"bundle" | b"cas" | b"cat2" | b"vpk"
+        | b"ucas" | b"utoc" | b"ubulk" | b"uasset" | b"umap" | b"bsa" | b"ba2" | b"wad"
+        | b"forge" | b"rpf" | b"assets" | b"ress" | b"psarc" | b"arc" | b"gguf"
+        | b"safetensors" | b"ckpt" | b"pt" | b"onnx" => Category::Application,
         b"dll" | b"sys" | b"drv" | b"ocx" | b"mui" | b"cat" | b"inf" | b"log" | b"etl"
         | b"evtx" | b"dat" | b"bin" | b"db" | b"sqlite" | b"ldb" | b"tmp" | b"cache"
         | b"manifest" | b"mum" | b"dmp" | b"pf" | b"lib" | b"obj" | b"o" | b"a" | b"so" => {
@@ -115,6 +120,7 @@ mod tests {
         assert_eq!(categorize(b"backup.tar.GZ"), Category::Archive);
         assert_eq!(categorize(b"song.flac"), Category::Audio);
         assert_eq!(categorize(b"setup.exe"), Category::Application);
+        assert_eq!(categorize(b"model.safetensors"), Category::Application);
     }
 
     #[test]

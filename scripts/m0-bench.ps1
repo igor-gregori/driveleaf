@@ -43,6 +43,13 @@ for ($run = 1; $run -le $Runs; $run++) {
 $capture = Join-Path $PSScriptRoot "${Drive}-drive.dlmft"
 & $cli capture "${Drive}:" $capture | Out-Null
 
+# Administrator rights are here anyway, so build the volume only Windows can write.
+try {
+    & (Join-Path $PSScriptRoot 'build.ps1') -OutDir $PSScriptRoot
+} catch {
+    Write-Warning "The Windows fixture was not built: $_"
+}
+
 $volume = Get-Volume -DriveLetter $Drive
 $summary = [ordered]@{
     measured = (Get-Date).ToString('s')

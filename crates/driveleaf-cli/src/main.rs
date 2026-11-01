@@ -13,6 +13,7 @@ use driveleaf_core::model::{
 };
 use driveleaf_core::query::SortKey;
 use driveleaf_core::scanner::{ScanError, scan_folder, scan_image as scan_image_tree};
+use driveleaf_ntfs::demo::{demo_record_count, for_each_demo_record};
 use driveleaf_ntfs::replay::ReplaySource;
 use driveleaf_ntfs::synth::{ImageLayout, TreeTotals, for_each_generated, write_image};
 use driveleaf_ntfs::{
@@ -29,6 +30,7 @@ usage:
   driveleaf-cli bench <target>                     time the queries behind the interface
   driveleaf-cli dump <drive letter or image file>  scan an MFT and print every record as TSV
   driveleaf-cli capture <drive letter> <file>      save what a scan reads, to replay it later
+  driveleaf-cli demo <image file>                  write a made-up disk for screenshots
   driveleaf-cli synth <image file> <records> [fragments]
                                                    write a synthetic NTFS volume image";
 
@@ -46,6 +48,7 @@ fn main() -> ExitCode {
         ["mft", target] => mft(target),
         ["dump", target] => dump(target),
         ["capture", target, path] => capture(target, path),
+        ["demo", path] => demo(path),
         ["synth", path, records] => synth(path, records, "1"),
         ["synth", path, records, fragments] => synth(path, records, fragments),
         _ => Err(USAGE.to_owned()),
@@ -427,6 +430,20 @@ fn scan_tree(target: &str, format: &str) -> Result<(), String> {
     written
         .and_then(|()| out.flush())
         .map_err(|error| error.to_string())
+}
+
+fn demo(path: &str) -> Result<(), String> {
+    let layout = ImageLayout {
+        bytes_per_cluster: 4096,
+        bytes_per_record: 1024,
+        record_count: demo_record_count(),
+        fragments: 1,
+    };
+    let file = File::create(path).map_err(|error| format!("{path}: {error}"))?;
+    let mut out = BufWriter::with_capacity(1 << 20, file);
+    let mut records = Vec::new();
+    for_each_demo_record(|number, spec| records.push((number, spec)));
+    write_image(&mut out, &layout, records).map_err(|error| format!("{path}: {error}"))
 }
 
 fn synth(path: &str, records: &str, fragments: &str) -> Result<(), String> {

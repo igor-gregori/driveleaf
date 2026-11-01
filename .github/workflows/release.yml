@@ -1,0 +1,44 @@
+name: Release
+
+# Runs only when a version tag is pushed, and stops at a draft release: nothing
+# reaches users until someone reviews the draft and publishes it.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+          cache: npm
+          cache-dependency-path: apps/desktop/package-lock.json
+      - run: cargo test
+      - working-directory: apps/desktop
+        run: npm ci
+      - working-directory: apps/desktop
+        run: npm test
+      - working-directory: apps/desktop
+        run: npm run tauri build
+      - name: Collect the release files
+        shell: pwsh
+        run: |
+          $version = "${{ github.ref_name }}".TrimStart("v")
+          New-Item -ItemType Directory dist | Out-Null
+          Copy-Item target/release/bundle/nsis/*-setup.exe dist/
+          Copy-Item target/release/driveleaf.exe "dist/Driveleaf_${version}_x64-portable.exe"
+          Get-FileHash dist/* -Algorithm SHA256 |
+            ForEach-Object { "$($_.Hash.ToLower())  $(Split-Path $_.Path -Leaf)" } |
+            Set-Content dist/SHA256SUMS.txt
+      - name: Create a draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "${{ github.ref_name }}" dist/* --draft --verify-tag --title "${{ github.ref_name }}" --notes-file CHANGELOG.md

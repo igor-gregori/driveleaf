@@ -96,10 +96,11 @@ impl Volume {
         if !letter.is_ascii_alphabetic() {
             return Err(io::ErrorKind::InvalidInput.into());
         }
-        let path: Vec<u16> = format!(r"\\.\{letter}:")
-            .encode_utf16()
-            .chain(Some(0))
-            .collect();
+        Self::open_path(&format!(r"\\.\{letter}:"))
+    }
+
+    fn open_path(path: &str) -> io::Result<Self> {
+        let path: Vec<u16> = path.encode_utf16().chain(Some(0)).collect();
         // SAFETY: `path` is NUL-terminated and outlives the call.
         let handle = unsafe {
             CreateFileW(
@@ -227,4 +228,64 @@ pub fn peak_memory_bytes() -> Option<u64> {
     // the `size` bytes passed.
     let succeeded = unsafe { K32GetProcessMemoryInfo(GetCurrentProcess(), &mut counters, size) };
     (succeeded != 0).then_some(counters.PeakWorkingSetSize as u64)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::source::AlignedBuffer;
+
+    const BLOCK: usize = 1 << 16;
+    const BLOCKS: usize = 256;
+
+    /// Opening a raw volume needs elevation, but reads take the same path on a
+    /// plain file: overlapped and unbuffered, from several threads at once.
+    #[test]
+    fn parallel_reads_return_the_right_bytes() {
+        let path = std::env::temp_dir().join(format!("driveleaf-{}.bin", std::process::id()));
+        let mut content = vec![0_u8; BLOCK * BLOCKS];
+        for (index, block) in content.as_chunks_mut::<BLOCK>().0.iter_mut().enumerate() {
+            block.fill(index as u8);
+        }
+        std::fs::write(&path, &content).unwrap();
+
+        let file = Volume::open_path(path.to_str().unwrap()).unwrap();
+        std::thread::scope(|scope| {
+            for thread in 0..8 {
+                let file = &file;
+                scope.spawn(move || {
+                    let mut buffer = AlignedBuffer::new(BLOCK);
+                    for step in 0..BLOCKS {
+                        let index = (step * 37 + thread) % BLOCKS;
+                        let slice = buffer.as_mut_slice();
+                        file.read_exact_at((index * BLOCK) as u64, slice).unwrap();
+                        assert!(slice.iter().all(|&byte| byte == index as u8));
+                    }
+                });
+            }
+        });
+        drop(file);
+        std::fs::remove_file(&path).unwrap();
+    }
+
+    #[test]
+    fn reading_past_the_end_is_an_error() {
+        let path = std::env::temp_dir().join(format!("driveleaf-end-{}.bin", std::process::id()));
+        std::fs::write(&path, vec![1_u8; 4096]).unwrap();
+        let file = Volume::open_path(path.to_str().unwrap()).unwrap();
+        let mut buffer = AlignedBuffer::new(4096);
+        assert!(file.read_exact_at(1 << 20, buffer.as_mut_slice()).is_err());
+        drop(file);
+        std::fs::remove_file(&path).unwrap();
+    }
+
+    #[test]
+    fn peak_memory_is_reported() {
+        assert!(peak_memory_bytes().unwrap() > 0);
+    }
+
+    #[test]
+    fn a_bad_drive_letter_is_refused() {
+        assert!(Volume::open('1').is_err());
+    }
 }

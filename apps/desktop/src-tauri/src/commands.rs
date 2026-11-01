@@ -252,7 +252,7 @@ pub fn start_scan(
                     std::thread::sleep(PROGRESS_INTERVAL);
                 }
             });
-            let result = scan_drive(letter, &control);
+            let result = scan_target(letter, &control);
             finished.store(true, Ordering::Relaxed);
             result
         });
@@ -272,6 +272,16 @@ pub fn start_scan(
         let _ = on_event.send(event);
     });
     Ok(())
+}
+
+/// Debug builds can scan a volume image instead of the drive, for screenshots.
+fn scan_target(letter: char, control: &ScanControl) -> Result<Model, ScanError> {
+    #[cfg(debug_assertions)]
+    if let Some(image) = std::env::var_os("DRIVELEAF_DEMO_IMAGE") {
+        let root = format!("{letter}:\\");
+        return driveleaf_core::scanner::scan_image_as(Path::new(&image), &root, control);
+    }
+    scan_drive(letter, control)
 }
 
 #[tauri::command]

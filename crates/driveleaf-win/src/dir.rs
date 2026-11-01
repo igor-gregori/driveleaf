@@ -157,3 +157,88 @@ pub fn list_directory(path: &Path, mut emit: impl FnMut(DirEntry)) -> io::Result
         parse_batch(bytes, &mut emit);
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+
+    fn sandbox(name: &str) -> std::path::PathBuf {
+        let root = std::env::temp_dir().join(format!("driveleaf-{name}-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir_all(root.join("sub")).unwrap();
+        root
+    }
+
+    fn listing(root: &Path) -> Vec<DirEntry> {
+        let mut entries = Vec::new();
+        list_directory(root, |entry| entries.push(entry)).unwrap();
+        entries.sort_by(|a, b| a.name.cmp(&b.name));
+        entries
+    }
+
+    #[test]
+    fn lists_names_sizes_and_kinds() {
+        let root = sandbox("list");
+        fs::write(root.join("data.bin"), vec![7_u8; 10_000]).unwrap();
+        fs::write(root.join("relat\u{F3}rio \u{1F33F}.txt"), b"hi").unwrap();
+
+        let entries = listing(&root);
+        fs::remove_dir_all(&root).unwrap();
+
+        assert_eq!(entries.len(), 3, "no . or .. entries");
+        assert_eq!(entries[0].name, "data.bin");
+        assert_eq!(entries[0].logical, 10_000);
+        assert!(entries[0].allocated >= 10_000);
+        assert!(!entries[0].is_directory());
+        assert!(entries[0].modified > 0);
+        assert_eq!(entries[1].name, "relat\u{F3}rio \u{1F33F}.txt");
+        assert_eq!(entries[2].name, "sub");
+        assert!(entries[2].is_directory());
+        assert!(!entries[2].is_link());
+    }
+
+    #[test]
+    fn long_listings_span_several_batches() {
+        let root = sandbox("many");
+        for index in 0..3000 {
+            fs::write(
+                root.join(format!("a-rather-long-file-name-{index:05}.txt")),
+                b"x",
+            )
+            .unwrap();
+        }
+        let entries = listing(&root);
+        fs::remove_dir_all(&root).unwrap();
+        assert_eq!(entries.len(), 3001);
+    }
+
+    #[test]
+    fn hard_links_share_a_file_id() {
+        let root = sandbox("links");
+        fs::write(root.join("first"), b"data").unwrap();
+        fs::hard_link(root.join("first"), root.join("second")).unwrap();
+        let entries = listing(&root);
+        fs::remove_dir_all(&root).unwrap();
+        assert_eq!(entries[0].file_id, entries[1].file_id);
+        assert_ne!(entries[0].file_id, 0);
+    }
+
+    #[test]
+    fn the_listing_and_the_file_agree_on_its_id() {
+        let root = sandbox("id");
+        fs::write(root.join("file"), b"data").unwrap();
+        let listed = listing(&root)[0].file_id;
+        let opened = crate::shell::file_id(root.join("file").as_os_str()).unwrap();
+        fs::remove_dir_all(&root).unwrap();
+        assert_eq!(listed, opened);
+    }
+
+    #[test]
+    fn a_missing_folder_is_an_error() {
+        let root = sandbox("missing");
+        fs::remove_dir_all(&root).unwrap();
+        assert!(list_directory(&root, |_| {}).is_err());
+        assert!(crate::shell::file_id(root.as_os_str()).is_err());
+    }
+}

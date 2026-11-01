@@ -1,0 +1,36 @@
+[package]
+name = "driveleaf-fuzz"
+version = "0.0.0"
+edition = "2024"
+publish = false
+license = "MIT OR Apache-2.0"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+driveleaf-ntfs = { path = "../crates/driveleaf-ntfs" }
+libfuzzer-sys = "0.4"
+
+[[bin]]
+name = "mft_record"
+path = "fuzz_targets/mft_record.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "data_runs"
+path = "fuzz_targets/data_runs.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "volume"
+path = "fuzz_targets/volume.rs"
+test = false
+doc = false
+bench = false
+
+[workspace]

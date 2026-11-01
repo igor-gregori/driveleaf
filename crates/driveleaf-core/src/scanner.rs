@@ -43,13 +43,21 @@ fn describe(path: &Path, error: std::io::Error) -> ScanError {
 
 /// Scans a volume image or a capture file. Paths in the tree start at `\`.
 pub fn scan_image(path: &Path, control: &ScanControl) -> Result<Model, ScanError> {
-    const ROOT_NAME: &str = "\\";
+    scan_image_as(path, "\\", control)
+}
+
+/// Scans a volume image or a capture file, showing its root as `root_name`.
+pub fn scan_image_as(
+    path: &Path,
+    root_name: &str,
+    control: &ScanControl,
+) -> Result<Model, ScanError> {
     let options = ScanOptions::default();
     if ReplaySource::is_capture(path).map_err(|error| describe(path, error))? {
         let replay = ReplaySource::open(path).map_err(|error| describe(path, error))?;
         let geometry = replay.geometry();
         let output = scan(&replay, &geometry, &options, control)?;
-        return Ok(build_model(&output, &geometry, ROOT_NAME));
+        return Ok(build_model(&output, &geometry, root_name));
     }
     let image = ImageFile::open(path).map_err(|error| describe(path, error))?;
     let mut boot = vec![0_u8; 4096];
@@ -58,7 +66,7 @@ pub fn scan_image(path: &Path, control: &ScanControl) -> Result<Model, ScanError
         .map_err(|error| describe(path, error))?;
     let geometry = Geometry::from_boot_sector(&boot)?;
     let output = scan(&image, &geometry, &options, control)?;
-    Ok(build_model(&output, &geometry, ROOT_NAME))
+    Ok(build_model(&output, &geometry, root_name))
 }
 
 /// Walks a folder.

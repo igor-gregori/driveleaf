@@ -738,7 +738,9 @@ dependencies = [
  "driveleaf-ntfs",
  "driveleaf-treemap",
  "driveleaf-win",
+ "flate2",
  "rayon",
+ "serde_json",
 ]
 
 [[package]]

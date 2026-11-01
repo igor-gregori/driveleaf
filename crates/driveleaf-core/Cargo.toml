@@ -17,6 +17,8 @@ rayon.workspace = true
 
 [dev-dependencies]
 driveleaf-ntfs = { workspace = true, features = ["synth"] }
+flate2 = "1"
+serde_json.workspace = true
 
 [target.'cfg(windows)'.dependencies]
 driveleaf-win.workspace = true
