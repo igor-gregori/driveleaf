@@ -17,5 +17,7 @@ tauri-build = { version = "2", features = [] }
 [dependencies]
 tauri = { version = "2", features = [] }
 serde.workspace = true
-serde_json.workspace = true
+driveleaf-core.workspace = true
+driveleaf-ntfs.workspace = true
 driveleaf-treemap.workspace = true
+driveleaf-win.workspace = true

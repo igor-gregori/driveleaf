@@ -8,6 +8,7 @@
 pub mod dir;
 pub mod elevation;
 pub mod shell;
+pub mod system;
 pub mod volumes;
 
 use std::ffi::{OsStr, OsString};

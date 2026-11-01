@@ -10,5 +10,6 @@ pub mod categories;
 pub mod mft_tree;
 pub mod model;
 pub mod query;
+pub mod safety;
 pub mod scanner;
 pub mod walk;

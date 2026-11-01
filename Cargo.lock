@@ -744,9 +744,11 @@ dependencies = [
 name = "driveleaf-desktop"
 version = "0.0.1"
 dependencies = [
+ "driveleaf-core",
+ "driveleaf-ntfs",
  "driveleaf-treemap",
+ "driveleaf-win",
  "serde",
- "serde_json",
  "tauri",
  "tauri-build",
 ]

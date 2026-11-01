@@ -456,6 +456,9 @@ impl Model {
 
     /// Removes a node from the totals after it was deleted. Only the ancestors
     /// change, so this is cheap, and the rest of the tree stays valid.
+    ///
+    /// A file with other hard links is still on disk under those names, so the
+    /// next link takes over its size instead of the space being freed.
     pub fn mark_deleted(&mut self, node: NodeId) {
         if node == ROOT || self.is_deleted(node) {
             return;
@@ -471,13 +474,34 @@ impl Model {
         if !counted {
             return;
         }
+        self.for_each_ancestor(node, |model, up| {
+            model.logical[up] = model.logical[up].saturating_sub(logical);
+            model.allocated[up] = model.allocated[up].saturating_sub(allocated);
+            model.files[up] = model.files[up].saturating_sub(files);
+        });
+        if self.is_directory(node) {
+            return;
+        }
+        let heir = self
+            .other_links(node)
+            .into_iter()
+            .find(|&other| self.flags(other) & FLAG_HARD_LINK != 0);
+        if let Some(heir) = heir {
+            self.flags[heir as usize] &= !FLAG_HARD_LINK;
+            self.files[heir as usize] = 1;
+            self.for_each_ancestor(heir, |model, up| {
+                model.logical[up] = model.logical[up].saturating_add(logical);
+                model.allocated[up] = model.allocated[up].saturating_add(allocated);
+                model.files[up] = model.files[up].saturating_add(1);
+            });
+        }
+    }
+
+    fn for_each_ancestor(&mut self, node: NodeId, mut change: impl FnMut(&mut Self, usize)) {
         let mut current = node;
         while current != ROOT {
             current = self.parent(current);
-            let up = current as usize;
-            self.logical[up] = self.logical[up].saturating_sub(logical);
-            self.allocated[up] = self.allocated[up].saturating_sub(allocated);
-            self.files[up] = self.files[up].saturating_sub(files);
+            change(self, current as usize);
         }
     }
 
@@ -643,6 +667,66 @@ mod tests {
         model.mark_deleted(3);
         model.mark_deleted(ROOT);
         assert_eq!(model.allocated(ROOT), 160);
+    }
+
+    #[test]
+    fn deleting_the_counted_name_passes_the_size_to_the_next_link() {
+        let mut tree = TreeBuilder::new("C:\\", 4, 16);
+        let folder = tree.add(ROOT, b"folder", dir());
+        let first = tree.add(
+            ROOT,
+            b"first",
+            NodeData {
+                file_id: 7,
+                ..file(100)
+            },
+        );
+        let second = tree.add(
+            folder,
+            b"second",
+            NodeData {
+                flags: FLAG_HARD_LINK,
+                file_id: 7,
+                ..file(100)
+            },
+        );
+        let mut model = tree.finish("<orphans>", summary());
+
+        model.mark_deleted(first);
+        assert_eq!(model.allocated(ROOT), 100, "the file is still on disk");
+        assert_eq!(model.allocated(folder), 100);
+        assert_eq!(model.files(ROOT), 1);
+        assert_eq!(model.weight(second), 100);
+
+        model.mark_deleted(second);
+        assert_eq!(model.allocated(ROOT), 0, "now the space is free");
+        assert_eq!(model.files(ROOT), 0);
+    }
+
+    #[test]
+    fn deleting_a_link_changes_no_total() {
+        let mut tree = TreeBuilder::new("C:\\", 4, 16);
+        tree.add(
+            ROOT,
+            b"first",
+            NodeData {
+                file_id: 7,
+                ..file(100)
+            },
+        );
+        let link = tree.add(
+            ROOT,
+            b"second",
+            NodeData {
+                flags: FLAG_HARD_LINK,
+                file_id: 7,
+                ..file(100)
+            },
+        );
+        let mut model = tree.finish("<orphans>", summary());
+        model.mark_deleted(link);
+        assert_eq!(model.allocated(ROOT), 100);
+        assert_eq!(model.files(ROOT), 1);
     }
 
     #[test]

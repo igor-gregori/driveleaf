@@ -302,8 +302,13 @@ mod tests {
         };
         let tiles = layout_tree(&tree, 0, 1000.0, 800.0, &options);
         assert!(tiles.len() <= 40);
-        assert!(tiles.iter().any(|tile| tile.node_id == big + 1));
-        assert!(!tiles.iter().any(|tile| tile.node_id == small + 1));
+        let opened = |low: u32, high: u32| {
+            tiles
+                .iter()
+                .any(|tile| tile.node_id > low && tile.node_id < high)
+        };
+        assert!(opened(big, small));
+        assert!(!opened(small, u32::MAX));
     }
 
     #[test]
