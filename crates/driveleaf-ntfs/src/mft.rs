@@ -410,7 +410,7 @@ mod tests {
             records: 3,
         };
         layout.read_job(&bytes[..], job, &mut buffer).unwrap();
-        for (index, slot) in buffer.chunks_exact_mut(1024).enumerate() {
+        for (index, slot) in buffer.as_chunks_mut::<1024>().0.iter_mut().enumerate() {
             apply_fixups(slot).unwrap();
             let header = RecordHeader::parse(slot).unwrap();
             assert_eq!(usize::from(header.sequence), index + 9);

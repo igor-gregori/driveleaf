@@ -508,7 +508,7 @@ pub fn for_each_generated(
         // Weyl sequence: cheap, deterministic and well spread.
         let mix = number.wrapping_mul(0x9E37_79B9_7F4A_7C15) >> 32;
         let pick = mix % 100;
-        if number % 13 == 0 {
+        if number.is_multiple_of(13) {
             let spec = RecordSpec::directory(1)
                 .attr(AttrSpec::standard(0x10))
                 .attr(AttrSpec::name(parent, 1, 3, &format!("dir{number:x}")));

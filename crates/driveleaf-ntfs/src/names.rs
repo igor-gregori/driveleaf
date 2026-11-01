@@ -7,9 +7,10 @@
 /// byte-identical to UTF-8 for every valid name.
 pub(crate) fn push_wtf8(pool: &mut Vec<u8>, raw: &[u8]) {
     pool.reserve(raw.len() / 2);
-    let mut units = raw
-        .chunks_exact(2)
-        .map(|pair| u16::from_le_bytes([pair[0], pair[1]]))
+    let (pairs, _) = raw.as_chunks::<2>();
+    let mut units = pairs
+        .iter()
+        .map(|&pair| u16::from_le_bytes(pair))
         .peekable();
     while let Some(unit) = units.next() {
         let code = match (unit, units.peek()) {
