@@ -6,9 +6,11 @@ use std::fs::File;
 use std::io::{BufWriter, Write};
 use std::path::Path;
 use std::process::ExitCode;
-use std::time::Instant;
 
-use driveleaf_core::walk::walk;
+use driveleaf_core::model::{
+    FLAG_DIRECTORY, FLAG_HARD_LINK, FLAG_LINK, FLAG_METAFILE, FLAG_SYNTHETIC, Model, NodeId, ROOT,
+};
+use driveleaf_core::scanner::{ScanError, scan_folder, scan_image as scan_image_tree};
 use driveleaf_ntfs::replay::ReplaySource;
 use driveleaf_ntfs::synth::{ImageLayout, TreeTotals, for_each_generated, write_image};
 use driveleaf_ntfs::{
@@ -18,10 +20,11 @@ use serde_json::{Value, json};
 
 const USAGE: &str = "\
 usage:
+  driveleaf-cli scan <target> [--format json|csv]  print every entry of a drive, folder,
+                                                   image or capture; csv is the default
   driveleaf-cli mft <drive letter or image file>   scan an MFT and print JSON totals
   driveleaf-cli dump <drive letter or image file>  scan an MFT and print every record as TSV
   driveleaf-cli capture <drive letter> <file>      save what a scan reads, to replay it later
-  driveleaf-cli walk <folder>                      walk a folder and print JSON totals
   driveleaf-cli synth <image file> <records> [fragments]
                                                    write a synthetic NTFS volume image";
 
@@ -33,10 +36,11 @@ fn main() -> ExitCode {
         .collect::<Vec<_>>()
         .as_slice()
     {
+        ["scan", target] => scan_tree(target, "csv"),
+        ["scan", target, "--format", format] => scan_tree(target, format),
         ["mft", target] => mft(target),
         ["dump", target] => dump(target),
         ["capture", target, path] => capture(target, path),
-        ["walk", folder] => walk_folder(folder),
         ["synth", path, records] => synth(path, records, "1"),
         ["synth", path, records, fragments] => synth(path, records, fragments),
         _ => Err(USAGE.to_owned()),
@@ -227,19 +231,152 @@ fn report(geometry: &Geometry, output: &ScanOutput, readers: usize) -> Value {
     })
 }
 
-fn walk_folder(folder: &str) -> Result<(), String> {
-    let started = Instant::now();
-    let stats = walk(Path::new(folder));
-    print_json(&json!({
-        "engine": "walk",
-        "elapsed_ms": started.elapsed().as_secs_f64() * 1000.0,
-        "files": stats.files,
-        "directories": stats.directories,
-        "logical_bytes": stats.logical_bytes,
-        "errors": stats.errors,
-        "peak_memory_bytes": peak_memory_bytes(),
-    }));
+fn scan_any(target: &str) -> Result<Model, ScanError> {
+    let control = ScanControl::default();
+    if let Some(letter) = drive_letter(target) {
+        return drive_tree(letter, &control);
+    }
+    let path = Path::new(target);
+    if path.is_dir() {
+        scan_folder(path, &control)
+    } else {
+        scan_image_tree(path, &control)
+    }
+}
+
+#[cfg(windows)]
+fn drive_tree(letter: char, control: &ScanControl) -> Result<Model, ScanError> {
+    driveleaf_core::scanner::scan_drive(letter, control)
+}
+
+#[cfg(not(windows))]
+fn drive_tree(letter: char, _control: &ScanControl) -> Result<Model, ScanError> {
+    Err(ScanError::Failed(format!(
+        "{letter}: scanning drives works on Windows only"
+    )))
+}
+
+fn kind(model: &Model, node: NodeId) -> &'static str {
+    let flags = model.flags(node);
+    if flags & FLAG_SYNTHETIC != 0 {
+        "synthetic"
+    } else if flags & FLAG_METAFILE != 0 {
+        "metafile"
+    } else if flags & FLAG_LINK != 0 {
+        "link"
+    } else if flags & FLAG_HARD_LINK != 0 {
+        "hardlink"
+    } else if flags & FLAG_DIRECTORY != 0 {
+        "directory"
+    } else {
+        "file"
+    }
+}
+
+/// Depth-first, so a folder comes right before what it holds.
+fn each_node(
+    model: &Model,
+    mut visit: impl FnMut(NodeId) -> std::io::Result<()>,
+) -> std::io::Result<()> {
+    let mut stack = vec![ROOT];
+    while let Some(node) = stack.pop() {
+        visit(node)?;
+        stack.extend(
+            model
+                .raw_children(node)
+                .iter()
+                .rev()
+                .copied()
+                .filter(|&child| model.is_visible(child)),
+        );
+    }
     Ok(())
+}
+
+fn csv_field(text: &str) -> String {
+    if text.contains(['"', ',', '\n', '\r']) {
+        format!("\"{}\"", text.replace('"', "\"\""))
+    } else {
+        text.to_owned()
+    }
+}
+
+/// Formats 100 ns ticks since 1601 as an ISO 8601 UTC time.
+fn iso_time(ticks: u64) -> String {
+    const TICKS_PER_SECOND: u64 = 10_000_000;
+    const SECONDS_TO_UNIX_EPOCH: u64 = 11_644_473_600;
+    if ticks == 0 {
+        return String::new();
+    }
+    let seconds = (ticks / TICKS_PER_SECOND).saturating_sub(SECONDS_TO_UNIX_EPOCH);
+    let (days, rest) = (seconds / 86_400, seconds % 86_400);
+    // Days to civil date, after Howard Hinnant's public domain algorithm.
+    let shifted = days + 719_468;
+    let era = shifted / 146_097;
+    let day_of_era = shifted - era * 146_097;
+    let year_of_era =
+        (day_of_era - day_of_era / 1460 + day_of_era / 36_524 - day_of_era / 146_096) / 365;
+    let day_of_year = day_of_era - (365 * year_of_era + year_of_era / 4 - year_of_era / 100);
+    let month_index = (5 * day_of_year + 2) / 153;
+    let day = day_of_year - (153 * month_index + 2) / 5 + 1;
+    let month = if month_index < 10 {
+        month_index + 3
+    } else {
+        month_index - 9
+    };
+    let year = year_of_era + era * 400 + u64::from(month <= 2);
+    format!(
+        "{year:04}-{month:02}-{day:02}T{:02}:{:02}:{:02}Z",
+        rest / 3600,
+        (rest / 60) % 60,
+        rest % 60
+    )
+}
+
+fn scan_tree(target: &str, format: &str) -> Result<(), String> {
+    if format != "csv" && format != "json" {
+        return Err(format!("unknown format {format}; use json or csv"));
+    }
+    let model = scan_any(target).map_err(|error| error.to_string())?;
+    let mut out = BufWriter::with_capacity(1 << 20, std::io::stdout().lock());
+    let written = if format == "csv" {
+        writeln!(out, "path,kind,logical,allocated,files,modified").and_then(|()| {
+            each_node(&model, |node| {
+                writeln!(
+                    out,
+                    "{},{},{},{},{},{}",
+                    csv_field(&model.display_path(node)),
+                    kind(&model, node),
+                    model.logical(node),
+                    model.allocated(node),
+                    model.files(node),
+                    iso_time(model.modified(node)),
+                )
+            })
+        })
+    } else {
+        let mut first = true;
+        writeln!(out, "[")
+            .and_then(|()| {
+                each_node(&model, |node| {
+                    let row = json!({
+                        "path": model.display_path(node),
+                        "kind": kind(&model, node),
+                        "logical": model.logical(node),
+                        "allocated": model.allocated(node),
+                        "files": model.files(node),
+                        "modified": iso_time(model.modified(node)),
+                    });
+                    let separator = if first { "" } else { ",\n" };
+                    first = false;
+                    write!(out, "{separator}{row}")
+                })
+            })
+            .and_then(|()| writeln!(out, "\n]"))
+    };
+    written
+        .and_then(|()| out.flush())
+        .map_err(|error| error.to_string())
 }
 
 fn synth(path: &str, records: &str, fragments: &str) -> Result<(), String> {
@@ -304,5 +441,20 @@ mod tests {
         assert_eq!(drive_letter("C:\\Windows"), None);
         assert_eq!(drive_letter("disk.img"), None);
         assert_eq!(drive_letter("1:"), None);
+    }
+
+    #[test]
+    fn csv_fields_are_quoted_only_when_needed() {
+        assert_eq!(csv_field("plain"), "plain");
+        assert_eq!(csv_field("a,b"), "\"a,b\"");
+        assert_eq!(csv_field("say \"hi\""), "\"say \"\"hi\"\"\"");
+    }
+
+    #[test]
+    fn file_times_become_utc_dates() {
+        assert_eq!(iso_time(0), "");
+        // The Unix epoch, then the leap day of 2024 at noon.
+        assert_eq!(iso_time(116_444_736_000_000_000), "1970-01-01T00:00:00Z");
+        assert_eq!(iso_time(133_536_816_000_000_000), "2024-02-29T12:00:00Z");
     }
 }

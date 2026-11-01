@@ -4,6 +4,7 @@ volume. ntfs-3g exposes the MFT record number as the inode, so every file can
 be matched one to one."""
 
 import collections
+import csv
 import json
 import sys
 
@@ -33,6 +34,34 @@ def load_dump(path):
                 record, parent = int(fields[1]), int(fields[2])
                 names[record].add((parent, fields[3].decode("utf-8")))
     return files, names
+
+
+def check_tree(expected, tree_path, problems):
+    """Every path must exist in the tree, and folders must add up."""
+    with open(tree_path, encoding="utf-8", newline="") as tree_file:
+        rows = {row["path"].lstrip("\\"): row for row in csv.DictReader(tree_file)}
+
+    for entry in expected["entries"]:
+        path = entry["path"].replace("/", "\\")
+        row = rows.get(path)
+        if row is None:
+            problems.append(f"{path} is missing from the tree")
+        elif not entry["dir"] and int(row["logical"]) != entry["size"]:
+            problems.append(f"{path}: tree says {row['logical']}, disk says {entry['size']}")
+
+    # Folders without hard links must equal the sum of what they hold.
+    for top in ("projects", "sparse", "compressed", "fragmented", "deleted", "nomes"):
+        wanted = sum(
+            entry["size"]
+            for entry in expected["entries"]
+            if not entry["dir"] and entry["path"].split("/")[0] == top
+        )
+        row = rows.get(top)
+        if row is None:
+            problems.append(f"{top} is missing from the tree")
+        elif int(row["logical"]) != wanted:
+            problems.append(f"{top}: folder total {row['logical']}, files add up to {wanted}")
+    return len(rows)
 
 
 def main():
@@ -88,12 +117,14 @@ def main():
         for record in files
         if record >= FIRST_USER_RECORD and record not in by_record and record not in (0,)
     ]
+    tree_rows = check_tree(expected, sys.argv[4], problems)
     used = expected["used_bytes"]
     allocated_total = report["allocated_bytes"]
     gap = 100.0 * (allocated_total - used) / used
 
     print(f"records matched one to one: {len(by_record)}")
     print(f"names checked: {len(expected['entries'])}")
+    print(f"tree rows: {tree_rows}")
     print(f"records the mount does not show: {len(unknown)} (metafile children)")
     print(f"allocated beyond st_blocks (streams and metadata): {extra_streams} bytes")
     print(f"allocated {allocated_total} vs volume used {used}: {gap:+.3f}%")

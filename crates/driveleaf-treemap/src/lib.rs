@@ -6,8 +6,10 @@
 #![forbid(unsafe_code)]
 
 mod synthetic;
+mod tree;
 
 pub use synthetic::synthetic_tiles;
+pub use tree::{LayoutOptions, STYLE_FOLDER, TreeSource, layout_tree};
 
 /// An axis-aligned rectangle in layout space.
 #[derive(Clone, Copy, Debug, PartialEq)]

@@ -45,4 +45,5 @@ cargo build --quiet --release -p driveleaf-cli --manifest-path "$root/Cargo.toml
 cli="$root/target/release/driveleaf-cli"
 "$cli" mft "$work/volume.img" > "$work/report.json"
 "$cli" dump "$work/volume.img" > "$work/dump.tsv"
-python3 "$here/verify.py" "$work/expected.json" "$work/dump.tsv" "$work/report.json"
+"$cli" scan "$work/volume.img" --format csv > "$work/tree.csv"
+python3 "$here/verify.py" "$work/expected.json" "$work/dump.tsv" "$work/report.json" "$work/tree.csv"

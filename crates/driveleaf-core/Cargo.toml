@@ -11,4 +11,12 @@ authors.workspace = true
 workspace = true
 
 [dependencies]
+driveleaf-ntfs.workspace = true
+driveleaf-treemap.workspace = true
 rayon.workspace = true
+
+[dev-dependencies]
+driveleaf-ntfs = { workspace = true, features = ["synth"] }
+
+[target.'cfg(windows)'.dependencies]
+driveleaf-win.workspace = true

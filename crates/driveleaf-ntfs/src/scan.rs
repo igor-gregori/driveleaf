@@ -66,6 +66,11 @@ impl ScanControl {
         self.cancelled.load(Ordering::Relaxed)
     }
 
+    /// Reports more finished work, for scanners other than [`scan`].
+    pub fn advance(&self, records: u64) {
+        self.records_done.fetch_add(records, Ordering::Relaxed);
+    }
+
     /// Records parsed so far and records to parse. The total is zero until the
     /// MFT has been located.
     pub fn progress(&self) -> (u64, u64) {
@@ -316,7 +321,7 @@ pub fn scan<S: BlockSource + ?Sized>(
         };
         std::thread::scope(|threads| {
             for _ in 1..readers {
-                threads.spawn(&reader);
+                threads.spawn(reader);
             }
             reader();
         });

@@ -114,6 +114,7 @@ def snapshot(root):
                         "record": info.st_ino,
                         "parent": parent,
                         "name": entry.name,
+                        "path": os.path.relpath(entry.path, root),
                         "dir": is_dir,
                         "size": info.st_size,
                         "blocks": info.st_blocks,

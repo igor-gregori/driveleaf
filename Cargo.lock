@@ -734,6 +734,9 @@ dependencies = [
 name = "driveleaf-core"
 version = "0.0.1"
 dependencies = [
+ "driveleaf-ntfs",
+ "driveleaf-treemap",
+ "driveleaf-win",
  "rayon",
 ]
 
@@ -759,6 +762,14 @@ dependencies = [
 [[package]]
 name = "driveleaf-treemap"
 version = "0.0.1"
+
+[[package]]
+name = "driveleaf-win"
+version = "0.0.1"
+dependencies = [
+ "windows",
+ "windows-sys 0.61.2",
+]
 
 [[package]]
 name = "dtoa"
