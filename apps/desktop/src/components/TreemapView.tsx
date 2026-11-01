@@ -52,6 +52,7 @@ export function TreemapView({
   const loadRef = useRef(0);
   const selectedRef = useRef(selected);
   selectedRef.current = selected;
+  const laidOutSizeRef = useRef("");
   const [unavailable, setUnavailable] = useState(false);
 
   const redraw = useCallback(() => {
@@ -104,6 +105,7 @@ export function TreemapView({
     if (!renderer || !canvas) return;
     const ticket = ++loadRef.current;
     const { width, height } = canvas.getBoundingClientRect();
+    laidOutSizeRef.current = `${width}x${height}`;
     const limit = softwareRef.current ? MAX_TILES_SOFTWARE : MAX_TILES;
     const bytes = await api.getTreemap(focus, width, height, limit);
     if (ticket !== loadRef.current) return;
@@ -137,6 +139,10 @@ export function TreemapView({
     }
   }, [animate, applySelection, focus, scanId]);
 
+  const latestLoadRef = useRef(load);
+  latestLoadRef.current = load;
+
+  // The renderer lives as long as the view. Changing folders only loads tiles.
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -158,13 +164,21 @@ export function TreemapView({
     const themeWatcher = new MutationObserver(() => applyTheme(readPalette(document.documentElement)));
     themeWatcher.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
 
-    let pending = 0;
-    const observer = new ResizeObserver(() => {
+    const fit = () => {
       const { width, height } = canvas.getBoundingClientRect();
       renderer.resize(width, height, window.devicePixelRatio);
+      return `${width}x${height}`;
+    };
+    fit();
+
+    let pending = 0;
+    const observer = new ResizeObserver(() => {
+      const size = fit();
       renderer.draw();
       window.clearTimeout(pending);
-      pending = window.setTimeout(() => void load(), RELAYOUT_DELAY_MS);
+      if (size !== laidOutSizeRef.current) {
+        pending = window.setTimeout(() => void latestLoadRef.current(), RELAYOUT_DELAY_MS);
+      }
     });
     observer.observe(canvas);
     return () => {
@@ -172,7 +186,7 @@ export function TreemapView({
       observer.disconnect();
       themeWatcher.disconnect();
     };
-  }, [load]);
+  }, []);
 
   useEffect(() => {
     void load();

@@ -145,6 +145,10 @@ export default function App() {
   }, []);
 
   const requestRecycle = useCallback((row: Row) => {
+    if (row.refusal !== null) {
+      toast.error(describeRefusal(row.refusal));
+      return;
+    }
     void Promise.all([api.getPath(row.id), api.countOtherLinks(row.id)])
       .then(([path, others]) => setRecycling({ row, path, linked: others > 0 }))
       .catch(reportFailure);
