@@ -13,6 +13,8 @@ use windows_sys::Win32::Storage::FileSystem::{
 };
 use windows_sys::Win32::System::IO::{DeviceIoControl, OVERLAPPED};
 use windows_sys::Win32::System::Ioctl::{FSCTL_GET_NTFS_VOLUME_DATA, NTFS_VOLUME_DATA_BUFFER};
+use windows_sys::Win32::System::ProcessStatus::{K32GetProcessMemoryInfo, PROCESS_MEMORY_COUNTERS};
+use windows_sys::Win32::System::Threading::GetCurrentProcess;
 
 use crate::geometry::Geometry;
 use crate::source::BlockSource;
@@ -122,6 +124,17 @@ impl BlockSource for Volume {
         }
         Ok(())
     }
+}
+
+/// Peak working set of this process, in bytes.
+pub fn peak_memory_bytes() -> Option<u64> {
+    // SAFETY: the counters are plain integers, for which all zeroes is valid.
+    let mut counters: PROCESS_MEMORY_COUNTERS = unsafe { mem::zeroed() };
+    let size = size_of::<PROCESS_MEMORY_COUNTERS>() as u32;
+    // SAFETY: the pseudo handle is always valid, and `counters` is writable for
+    // the `size` bytes passed.
+    let succeeded = unsafe { K32GetProcessMemoryInfo(GetCurrentProcess(), &mut counters, size) };
+    (succeeded != 0).then_some(counters.PeakWorkingSetSize as u64)
 }
 
 impl Drop for Volume {

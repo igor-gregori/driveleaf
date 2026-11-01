@@ -1,0 +1,18 @@
+[package]
+name = "engine-compare"
+description = "M0 spike: the driveleaf-cli workload on the candidate NTFS crates"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[lints]
+workspace = true
+
+[dependencies]
+driveleaf-ntfs.workspace = true
+mft = { version = "0.9", default-features = false }
+serde_json.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+ntfs-reader = "0.6"

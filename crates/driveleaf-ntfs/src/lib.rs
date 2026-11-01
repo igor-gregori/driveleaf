@@ -27,3 +27,18 @@ pub use scan::{
     Chunk, RAW_DIRECTORY, RAW_EXTENSION, RawFile, RawName, ScanOptions, ScanOutput, ScanStats, scan,
 };
 pub use source::{BlockSource, ImageFile};
+
+/// Peak resident memory of this process, in bytes.
+pub fn peak_memory_bytes() -> Option<u64> {
+    #[cfg(windows)]
+    {
+        win::peak_memory_bytes()
+    }
+    #[cfg(not(windows))]
+    {
+        let status = std::fs::read_to_string("/proc/self/status").ok()?;
+        let line = status.lines().find(|line| line.starts_with("VmHWM:"))?;
+        let kib: u64 = line.split_whitespace().nth(1)?.parse().ok()?;
+        Some(kib * 1024)
+    }
+}

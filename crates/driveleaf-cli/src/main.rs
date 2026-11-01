@@ -3,19 +3,20 @@
 #![forbid(unsafe_code)]
 
 use std::fs::File;
-use std::io::BufWriter;
+use std::io::{BufWriter, Write};
 use std::path::Path;
 use std::process::ExitCode;
 use std::time::Instant;
 
 use driveleaf_core::walk::walk;
 use driveleaf_ntfs::synth::{ImageLayout, TreeTotals, for_each_generated, write_image};
-use driveleaf_ntfs::{Geometry, ImageFile, ScanOptions, ScanOutput, scan};
+use driveleaf_ntfs::{Geometry, ImageFile, ScanOptions, ScanOutput, peak_memory_bytes, scan};
 use serde_json::{Value, json};
 
 const USAGE: &str = "\
 usage:
   driveleaf-cli mft <drive letter or image file>   scan an MFT and print JSON totals
+  driveleaf-cli dump <drive letter or image file>  scan an MFT and print every record as TSV
   driveleaf-cli walk <folder>                      walk a folder and print JSON totals
   driveleaf-cli synth <image file> <records> [fragments]
                                                    write a synthetic NTFS volume image";
@@ -29,6 +30,7 @@ fn main() -> ExitCode {
         .as_slice()
     {
         ["mft", target] => mft(target),
+        ["dump", target] => dump(target),
         ["walk", folder] => walk_folder(folder),
         ["synth", path, records] => synth(path, records, "1"),
         ["synth", path, records, fragments] => synth(path, records, fragments),
@@ -50,14 +52,47 @@ fn drive_letter(target: &str) -> Option<char> {
     matches!(chars.as_str(), "" | ":" | ":\\").then_some(letter)
 }
 
-fn mft(target: &str) -> Result<(), String> {
+fn scan_target(target: &str) -> Result<(Geometry, ScanOutput), String> {
     let options = ScanOptions::default();
-    let (geometry, output) = match drive_letter(target) {
-        Some(letter) => scan_drive(letter, &options)?,
-        None => scan_image(Path::new(target), &options)?,
-    };
+    match drive_letter(target) {
+        Some(letter) => scan_drive(letter, &options),
+        None => scan_image(Path::new(target), &options),
+    }
+}
+
+fn mft(target: &str) -> Result<(), String> {
+    let (geometry, output) = scan_target(target)?;
     print_json(&report(&geometry, &output));
     Ok(())
+}
+
+/// One `F` line per record and one `N` line per name, in tab-separated fields.
+fn dump(target: &str) -> Result<(), String> {
+    let (_, output) = scan_target(target)?;
+    let mut out = BufWriter::with_capacity(1 << 20, std::io::stdout().lock());
+    let mut write_all = || -> std::io::Result<()> {
+        for chunk in &output.chunks {
+            for file in &chunk.files {
+                writeln!(
+                    out,
+                    "F\t{}\t{}\t{}\t{}\t{}\t{}",
+                    file.record,
+                    file.flags,
+                    file.link_count,
+                    file.logical_size,
+                    file.stream_size,
+                    file.allocated
+                )?;
+            }
+            for name in &chunk.names {
+                write!(out, "N\t{}\t{}\t", name.record, name.parent)?;
+                out.write_all(chunk.name(name))?;
+                out.write_all(b"\n")?;
+            }
+        }
+        out.flush()
+    };
+    write_all().map_err(|error| error.to_string())
 }
 
 #[cfg(windows)]
@@ -127,7 +162,7 @@ fn report(geometry: &Geometry, output: &ScanOutput) -> Value {
         "bytes_read": stats.bytes_read,
         "engine_memory_bytes": output.memory_bytes(),
         "engine_bytes_per_entry": output.memory_bytes() as f64 / entries as f64,
-        "peak_rss_kb": peak_rss_kb(),
+        "peak_memory_bytes": peak_memory_bytes(),
     })
 }
 
@@ -141,7 +176,7 @@ fn walk_folder(folder: &str) -> Result<(), String> {
         "directories": stats.directories,
         "logical_bytes": stats.logical_bytes,
         "errors": stats.errors,
-        "peak_rss_kb": peak_rss_kb(),
+        "peak_memory_bytes": peak_memory_bytes(),
     }));
     Ok(())
 }
@@ -194,13 +229,6 @@ fn print_json(value: &Value) {
         "{}",
         serde_json::to_string_pretty(value).expect("JSON values always serialize")
     );
-}
-
-/// Peak resident memory. Windows runs read it from the outside instead.
-fn peak_rss_kb() -> Option<u64> {
-    let status = std::fs::read_to_string("/proc/self/status").ok()?;
-    let line = status.lines().find(|line| line.starts_with("VmHWM:"))?;
-    line.split_whitespace().nth(1)?.parse().ok()
 }
 
 #[cfg(test)]
