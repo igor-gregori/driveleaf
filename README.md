@@ -11,7 +11,7 @@ moments, and it shows what fills your disk as a treemap you can click through.
 ## What it does
 
 - **Scans in moments.** With administrator rights it reads the MFT in parallel:
-  0.39 s for 711,000 records on a fast NVMe drive ([details](docs/benchmarks.md)).
+  0.32 s for 712,000 records on a fast NVMe drive ([details](docs/benchmarks.md)).
 - **Works without administrator rights too.** It falls back to a parallel folder
   walk, and that is also how it handles exFAT, ReFS and network drives.
 - **Adds up to the disk.** Hard links count once, compressed and sparse files

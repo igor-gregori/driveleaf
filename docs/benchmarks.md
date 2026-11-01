@@ -9,9 +9,9 @@ a fast desktop, so read these as best-case numbers.
 | Target | Result | Status |
 |---|---|---|
 | Scan time within 20% of WizTree | Not compared yet | Open |
-| Public reference: 0.6 M files in about 1.3 s on NVMe | 0.54 M files in 0.39 s | Beaten |
+| Public reference: 0.6 M files in about 1.3 s on NVMe | 0.54 M files in 0.32 s | Beaten |
 | Engine memory up to 150 bytes per entry | 71 to 115 bytes | Met |
-| Allocated total within 1% of used space | −0.12% on a real 533 GB drive | Met |
+| Allocated total within 1% of used space | −0.12% on a real 534 GB drive | Met |
 | `.exe` up to 15 MB | 4.3 MB, and a 1.7 MB installer | Met |
 | 60 FPS while zooming with 200,000 tiles | 180 FPS, the display's limit | Met |
 | Navigation under 100 ms at 5 M files | 21 to 40 ms per query | Met |
@@ -19,22 +19,22 @@ a fast desktop, so read these as best-case numbers.
 
 ## Scanning a real drive
 
-The C: drive, 533 GB used, 711,349 records and 543,673 files, read as administrator.
+The C: drive, 534 GB used, 711,933 records and 544,163 files, read as administrator.
 Each engine ran 3 times, and the workload was the same: decode every in-use record,
 count, read the name and sum the sizes. Reproduce with `scripts/m0-bench.ps1`.
 
 | Engine | Median | First run | Peak memory |
 |---|---|---|---|
-| **Driveleaf** | **0.394 s** | 1.125 s | 214 MB |
-| `ntfs-reader` 0.6.0, `Mft` | 0.930 s | 0.930 s | 950 MB |
-| `ntfs-reader` 0.6.0, `MftScan` | 1.371 s | 1.371 s | 118 MB |
+| **Driveleaf** | **0.316 s** | 0.317 s | 138 MB |
+| `ntfs-reader` 0.6.0, `Mft` | 0.948 s | 1.627 s | 950 MB |
+| `ntfs-reader` 0.6.0, `MftScan` | 1.391 s | 1.388 s | 118 MB |
 
-- This run read the MFT on one thread. 352 ms of the 393 ms went to reading, so
-  parsing kept up and the disk set the pace. Scans now read in parallel on flash
-  storage, which has not been measured on a real volume yet.
-- The first Driveleaf run took 730 ms longer, outside the read calls. The cause is
-  still unknown. It happened only once, and `ntfs-reader` did not show it, though
-  that engine ran second.
+- Driveleaf read the MFT on 8 threads, which is the default on flash storage. On one
+  thread the median was 0.394 s, so reading in parallel saved 20%. The disk still sets
+  the pace, since about 270 ms of the 316 ms go to reading.
+- All 754,844 records parsed, with none corrupt, malformed or unreadable.
+- Whichever engine runs first pays about 700 ms, once. It hit Driveleaf in an earlier
+  round, and `ntfs-reader` in this one. The cause is unknown.
 - None of this was right after a reboot. Driveleaf reads bypass the file cache, so
   its runs stay comparable, but a true cold start is still to be measured.
 
@@ -42,13 +42,31 @@ count, read the name and sum the sizes. Reproduce with `scripts/m0-bench.ps1`.
 
 | Source | Bytes | Difference |
 |---|---|---|
-| Sum of everything in the MFT | 569,518,313,472 | |
-| Used clusters, according to NTFS | 570,217,070,592 | −0.12% |
-| Used space, according to `Get-Volume` | 573,014,503,424 | −0.61% |
+| Sum of everything in the MFT | 573,468,119,040 | |
+| Used clusters, according to NTFS | 574,166,876,160 | −0.12% |
+| Used space, according to `Get-Volume` | 577,754,071,040 | −0.74% |
 
 `Get-Volume` counts space Windows reserves for itself, which is not in any file.
-The remaining 666 MiB are unexplained so far. Part of it may be recent changes not
-yet written to disk, since the scan reads what is on disk, not what is in the cache.
+
+The remaining 666 MiB belong to no record. Adding up the data runs of every attribute
+of every record gives the same total as the scanner, one attribute type at a time,
+and no cluster is claimed twice. The gap was the same to the byte in rounds with 4 GB
+of changes between them, so it is not writes waiting to reach the disk. What holds
+those clusters is unknown.
+
+### The MFT against a folder walk
+
+The same drive read twice: a capture of the MFT, then a walk through the documented
+folder API. 472,215 files appear in both.
+
+- 472,101 have the same size. Of the other 114, 53 changed between the two readings,
+  since their dates differ too. The remaining 61 are mostly `.etl` and `.log` files,
+  and the listing shows 0 bytes for 48 of them where the MFT has the real size.
+- 374,524 have the same size on disk. Another 97,008 fit inside their MFT record and
+  use no clusters, so the MFT says 0 and the listing gives a few hundred bytes. The
+  MFT also adds up every stream of a file, and the listing only the main one.
+- The MFT holds 56,504 more paths, nearly all in folders the walk had no permission
+  to open, such as `WindowsApps` and parts of `System32`.
 
 ## Speed against the candidate crates
 
@@ -78,24 +96,36 @@ and compares the parser with what the file system reports:
 | Sizes, link counts, names, stream sizes, paths, folder totals | All match |
 | Allocated total against volume used | 111,493,120 bytes each, 0.000% |
 
-`fixtures/build.ps1` builds the same kind of test from a volume written by Windows,
-with WOF compression, junctions and symbolic links. It needs administrator rights.
+`fixtures/build.ps1` builds the same kind of test from a 64 MB volume written by
+Windows, with WOF compression, junctions and symbolic links:
+
+| Check | Result |
+|---|---|
+| Files and folders Windows lists | 571, all found with their kind and size |
+| Hard links, compression, sparse files, streams, links, metafiles | All match |
+| Allocated total against the volume's `$Bitmap` | 11,948,032 bytes each |
+
+`Get-Volume` reports 4 MiB more on this volume, in no file and outside the bitmap.
+
+Building it needs administrator rights. The image records the security identifier of
+the account that built it, so it stays out of the repository and CI builds its own.
 
 ## The model and the queries
 
 `driveleaf-cli bench <target>` times what the interface asks for.
 
-| | 5 M entries (synthetic) | 739,000 entries (real C:, folder walk) |
-|---|---|---|
-| Scan and build the tree | 628 ms | 3,494 ms |
-| Memory per entry | 71 bytes | 115 bytes |
-| Children of a folder, sorted by name | 23 ms | 0.01 ms |
-| Rank every file by size | 40 ms | 4.9 ms |
-| Space per file type | 21 ms | 2.8 ms |
-| Search all names | 25 ms | 6.6 ms |
-| Treemap of the root | see below | 1.5 ms, 14,749 tiles |
+| | 5 M entries (synthetic) | 795,000 entries (real C:, MFT) | 739,000 entries (real C:, folder walk) |
+|---|---|---|---|
+| Scan and build the tree | 628 ms | 132 ms | 3,494 ms |
+| Memory per entry | 71 bytes | 84 bytes | 115 bytes |
+| Children of a folder, sorted by name | 23 ms | 0.01 ms | 0.01 ms |
+| Rank every file by size | 40 ms | 4.7 ms | 4.9 ms |
+| Space per file type | 21 ms | 3.7 ms | 2.8 ms |
+| Search all names | 25 ms | 7.6 ms | 6.6 ms |
+| Treemap of the root | see below | 1.7 ms, 15,277 tiles | 1.5 ms, 14,749 tiles |
 
-The synthetic tree is a long chain of folders, which makes its treemap unrealistically
+The MFT column replays a capture of the drive, so its 132 ms leave out the disk. The
+synthetic tree is a long chain of folders, which makes its treemap unrealistically
 cheap, so that number is left out. Peak memory while scanning 5 M entries was 1.1 GB,
 falling to 358 MB once the tree is built.
 

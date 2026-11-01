@@ -12,7 +12,7 @@ que você explora com cliques.
 ## O que ele faz
 
 - **Analisa em instantes.** Com permissão de administrador, lê a MFT em paralelo:
-  0,39 s para 711 mil registros em um NVMe rápido ([detalhes](docs/benchmarks.md)).
+  0,32 s para 712 mil registros em um NVMe rápido ([detalhes](docs/benchmarks.md)).
 - **Também funciona sem administrador.** Nesse caso percorre as pastas em paralelo,
   e é assim também que trata exFAT, ReFS e unidades de rede.
 - **Fecha a conta com o disco.** Hard links contam uma vez, arquivos comprimidos e
