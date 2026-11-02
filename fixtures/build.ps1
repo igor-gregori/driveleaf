@@ -151,3 +151,5 @@ try {
     Remove-Item $vhd -ErrorAction SilentlyContinue
 }
 Get-Item (Join-Path $OutDir 'windows-ntfs.*') | Select-Object Name, Length | Format-Table -AutoSize
+# Reaching here means the image is complete, whatever diskpart said last.
+exit 0
