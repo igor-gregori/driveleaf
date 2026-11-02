@@ -91,7 +91,7 @@ export function TopFiles({
               <div
                 key={row.id}
                 className={cn(
-                  "absolute inset-x-0 flex cursor-default items-center gap-2 px-2 select-none hover:bg-accent/60",
+                  "absolute inset-x-0 flex cursor-pointer items-center gap-2 px-2 select-none hover:bg-accent/60",
                   row.id === selected && "bg-accent",
                 )}
                 style={{ height: ROW_HEIGHT, transform: `translateY(${item.start}px)` }}

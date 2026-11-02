@@ -300,7 +300,7 @@ export function TreePanel({ scanId, generation, selected, onSelect, onOpen, onMe
                 aria-selected={row.id === selected}
                 aria-expanded={row.hasChildren ? isOpen : undefined}
                 className={cn(
-                  "absolute inset-x-0 grid cursor-default grid-cols-[minmax(0,1fr)_56px_60px_76px] items-center gap-2 px-2 text-xs select-none hover:bg-accent/60",
+                  "absolute inset-x-0 grid cursor-pointer grid-cols-[minmax(0,1fr)_56px_60px_76px] items-center gap-2 px-2 text-xs select-none hover:bg-accent/60",
                   row.id === selected && "bg-accent",
                 )}
                 style={{ height: ROW_HEIGHT, transform: `translateY(${item.start}px)` }}
