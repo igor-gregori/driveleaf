@@ -5,20 +5,25 @@ explicit approval. Do the steps in order.
 
 ## Before the first release
 
-- [ ] Confirm the name. The trademark screening in `benchmarks.md` was clean, but
+- [x] Confirm the name. The trademark screening in `benchmarks.md` was clean, but
       it is not legal advice.
-- [ ] Check the author name and email on the commits, which become public with the
+- [x] Check the author name and email on the commits, which become public with the
       first push.
-- [ ] Create the GitHub organization and repository, and push `main`.
-- [ ] Add `repository` and `homepage` to `[workspace.package]`, plus `readme`,
+- [x] Create the repository, `igor-gregori/driveleaf`, and push `main`.
+- [x] Add `repository` and `homepage` to `[workspace.package]`, plus `readme`,
       `keywords` and `categories` to each crate that gets published.
-- [ ] Add the repository URL to `packaging/`.
-- [ ] Turn on private vulnerability reporting, which `SECURITY.md` promises.
-- [ ] Watch CI go green, which has never run. Fix what only shows up there.
-- [ ] Ask the SignPath Foundation for free code signing, after checking its current
-      conditions. Without a signature, SmartScreen warns every user.
-- [ ] Register a domain, if wanted. `driveleaf.dev`, `.app`, `.org` and `.io` were
-      free on 2026-10-31, and `driveleaf.com` was taken.
+- [x] Point `packaging/` at the website. The repository fills in per release.
+- [x] Turn on private vulnerability reporting, which `SECURITY.md` promises.
+- [x] Watch CI go green. The Windows fixture needed fixes that only showed there:
+      runners cannot compress with WOF, and diskpart detaches on its own.
+- [ ] Ask the SignPath Foundation for free code signing. Its terms ask for a
+      project that is "already released in the form that should be signed", so
+      this comes after 0.1.0 is public. It also asks for MFA on every account, a
+      "Code signing policy" section on the website, and makes SignPath
+      Foundation the publisher shown by Windows.
+- [x] Register a domain: `driveleaf.app`, on Cloudflare. The website in `site/`
+      deploys to GitHub Pages.
+- [ ] Point the domain's DNS at GitHub Pages and turn on Cloudflare Web Analytics.
 
 ## Every release
 
