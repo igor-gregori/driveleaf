@@ -142,7 +142,12 @@ try {
     }
     $gzip.Close(); $target.Close(); $source.Close()
 } finally {
-    Invoke-Diskpart @("select vdisk file=`"$vhd`"", 'detach vdisk')
+    # A failed detach must not hide whatever failed above.
+    try {
+        Invoke-Diskpart @("select vdisk file=`"$vhd`"", 'detach vdisk')
+    } catch {
+        Write-Warning $_
+    }
     Remove-Item $vhd -ErrorAction SilentlyContinue
 }
 Get-Item (Join-Path $OutDir 'windows-ntfs.*') | Select-Object Name, Length | Format-Table -AutoSize
