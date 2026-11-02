@@ -23,7 +23,11 @@ explicit approval. Do the steps in order.
       Foundation the publisher shown by Windows.
 - [x] Register a domain: `driveleaf.app`, on Cloudflare. The website in `site/`
       deploys to GitHub Pages.
-- [ ] Point the domain's DNS at GitHub Pages and turn on Cloudflare Web Analytics.
+- [x] Point the domain's DNS at GitHub Pages, DNS only, and turn on Cloudflare Web
+      Analytics with the JS snippet. HTTPS is enforced, with a Let's Encrypt
+      certificate from GitHub.
+- [ ] Submit the sitemap in Google Search Console, verifying the domain with a
+      TXT record on Cloudflare.
 
 ## Every release
 
