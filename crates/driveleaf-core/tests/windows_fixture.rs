@@ -152,11 +152,19 @@ fn hard_links_count_once() {
 
 #[test]
 fn compression_and_sparse_files_report_real_clusters() {
-    let Some((model, _)) = load() else {
+    let Some((model, manifest)) = load() else {
         return;
     };
     let paths = index_paths(model);
-    for name in ["compressed\\ntfs.txt", "compressed\\wof.txt"] {
+    // Some Windows editions cannot compress with WOF, so the fixture says
+    // whether it did.
+    let wof = manifest.get("wof").and_then(Value::as_bool).unwrap_or(true);
+    let names: &[&str] = if wof {
+        &["compressed\\ntfs.txt", "compressed\\wof.txt"]
+    } else {
+        &["compressed\\ntfs.txt"]
+    };
+    for &name in names {
         let node = paths[name];
         assert_eq!(model.logical(node), 960_000, "{name}");
         assert!(model.allocated(node) < 200_000, "{name} is not compressed");
