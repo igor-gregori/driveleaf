@@ -27,8 +27,9 @@ que você explora com cliques.
 
 ## Instalação
 
-O Driveleaf ainda não tem versão pública. Quando tiver, o instalador e um `.exe`
-portátil vão estar na página de versões, além do `winget` e do Scoop.
+Baixe o instalador ou o `.exe` portátil em [driveleaf.app](https://driveleaf.app/pt-br/)
+ou na [página de versões](https://github.com/igor-gregori/driveleaf/releases/latest). Ele roda no Windows 10 e 11,
+64 bits.
 
 ## Como usar
 
@@ -44,8 +45,9 @@ caminho no topo ou `Backspace` para voltar. O botão direito abre as ações.
 | `Enter` | Abrir no treemap a pasta selecionada |
 | `Delete` | Enviar o item selecionado para a Lixeira, após confirmar |
 
-O app abre sem permissão de administrador. Se analisar no modo lento, a barra de
-status oferece **Reabrir como administrador**, que mostra o aviso normal do Windows.
+O app abre sem permissão de administrador. Numa unidade NTFS, a barra do topo
+oferece então **Reabrir como administrador**, que mostra o aviso normal do Windows
+e libera o modo rápido.
 
 ### Como os tamanhos são contados
 

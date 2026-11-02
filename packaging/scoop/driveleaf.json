@@ -1,7 +1,7 @@
 {
   "version": "{{VERSION}}",
   "description": "Fast, open-source disk space analyzer that reads the NTFS Master File Table.",
-  "homepage": "https://github.com/{{REPOSITORY}}",
+  "homepage": "https://driveleaf.app",
   "license": "MIT|Apache-2.0",
   "architecture": {
     "64bit": {

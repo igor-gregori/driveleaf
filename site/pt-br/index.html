@@ -1,0 +1,357 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Driveleaf: analisador de espaço em disco grátis e open source para Windows</title>
+<meta name="description" content="O Driveleaf mostra o que ocupa o seu disco em instantes. Ele lê a Master File Table do NTFS e mostra a unidade como um treemap clicável. Grátis e open source.">
+<meta name="robots" content="index, follow, max-image-preview:large">
+<link rel="canonical" href="https://driveleaf.app/pt-br/">
+<link rel="alternate" hreflang="en" href="https://driveleaf.app/">
+<link rel="alternate" hreflang="pt-BR" href="https://driveleaf.app/pt-br/">
+<link rel="alternate" hreflang="x-default" href="https://driveleaf.app/">
+<meta name="theme-color" content="#0a0a0a" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Driveleaf">
+<meta property="og:title" content="Driveleaf: veja o que ocupa o seu disco, em instantes">
+<meta property="og:description" content="Um analisador de espaço em disco grátis e open source para Windows. Lê a Master File Table do NTFS e mostra a unidade como um treemap.">
+<meta property="og:url" content="https://driveleaf.app/pt-br/">
+<meta property="og:image" content="https://driveleaf.app/og-pt.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="O Driveleaf mostrando uma unidade como um treemap colorido ao lado de uma árvore de pastas">
+<meta property="og:locale" content="pt_BR">
+<meta property="og:locale:alternate" content="en_US">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Driveleaf: veja o que ocupa o seu disco, em instantes">
+<meta name="twitter:description" content="Um analisador de espaço em disco grátis e open source para Windows.">
+<meta name="twitter:image" content="https://driveleaf.app/og-pt.png">
+<link rel="icon" href="/favicon.ico" sizes="any">
+<link rel="icon" href="/assets/icon-256.png" type="image/png" sizes="256x256">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="manifest" href="/site.webmanifest">
+<link rel="preload" href="/assets/geist-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="/assets/overview-dark-pt.webp" as="image" type="image/webp" fetchpriority="high">
+<link rel="stylesheet" href="/assets/site.css">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "SoftwareApplication",
+      "@id": "https://driveleaf.app/#app",
+      "name": "Driveleaf",
+      "url": "https://driveleaf.app/pt-br/",
+      "description": "Um analisador de espaço em disco grátis e open source para Windows. Lê a Master File Table do NTFS diretamente e mostra a unidade como um treemap clicável.",
+      "applicationCategory": "UtilitiesApplication",
+      "applicationSubCategory": "Analisador de espaço em disco",
+      "operatingSystem": "Windows 10, Windows 11",
+      "softwareVersion": "0.1.0",
+      "inLanguage": ["en", "pt-BR"],
+      "isAccessibleForFree": true,
+      "license": "https://github.com/igor-gregori/driveleaf/blob/main/LICENSE-MIT",
+      "downloadUrl": "https://github.com/igor-gregori/driveleaf/releases/latest",
+      "codeRepository": "https://github.com/igor-gregori/driveleaf",
+      "image": "https://driveleaf.app/og-pt.png",
+      "screenshot": "https://driveleaf.app/assets/overview-dark-pt.webp",
+      "offers": { "@type": "Offer", "price": "0", "priceCurrency": "BRL" },
+      "author": { "@type": "Person", "name": "Igor", "url": "https://github.com/igor-gregori" }
+    },
+    {
+      "@type": "FAQPage",
+      "inLanguage": "pt-BR",
+      "mainEntity": [
+        { "@type": "Question", "name": "O Driveleaf é grátis?", "acceptedAnswer": { "@type": "Answer", "text": "Sim. O Driveleaf é grátis e open source, sob a licença MIT ou Apache-2.0, para uso pessoal e comercial, sem anúncios e sem conta." } },
+        { "@type": "Question", "name": "O Driveleaf precisa de permissão de administrador?", "acceptedAnswer": { "@type": "Answer", "text": "Não. Com permissão de administrador ele lê a Master File Table do NTFS, que é o modo rápido. Sem ela, percorre as pastas em paralelo, o que também cobre exFAT, ReFS e unidades de rede." } },
+        { "@type": "Question", "name": "O Driveleaf pode apagar meus arquivos?", "acceptedAnswer": { "@type": "Answer", "text": "Só quando você pede. O Driveleaf apenas lê a unidade. Remover um item manda para a Lixeira depois de uma confirmação, e arquivos do sistema são recusados." } },
+        { "@type": "Question", "name": "Como o Driveleaf se compara ao WizTree, WinDirStat e TreeSize?", "acceptedAnswer": { "@type": "Answer", "text": "Todos mostram onde está o espaço do disco. O Driveleaf lê a Master File Table do NTFS, como o WizTree, e é isso que faz uma análise completa levar instantes. Ele é open source e grátis para qualquer uso." } },
+        { "@type": "Question", "name": "O Driveleaf envia algum dado?", "acceptedAnswer": { "@type": "Answer", "text": "Não. O app não faz nenhuma conexão de rede: sem telemetria, sem verificação de atualização e sem conteúdo remoto." } },
+        { "@type": "Question", "name": "Quais versões do Windows o Driveleaf suporta?", "acceptedAnswer": { "@type": "Answer", "text": "Windows 10 e Windows 11, 64 bits. O modo rápido funciona em unidades NTFS, e as demais são analisadas pasta por pasta." } }
+      ]
+    }
+  ]
+}
+</script>
+</head>
+<body>
+<a class="skip" href="#main">Pular para o conteúdo</a>
+
+<header class="site-header">
+  <nav class="container nav" aria-label="Principal">
+    <a class="brand" href="/pt-br/" aria-label="Início do Driveleaf">
+      <img src="/assets/icon-64.png" width="28" height="28" alt="">
+      Driveleaf
+    </a>
+    <div class="nav-links">
+      <a href="#recursos">Recursos</a>
+      <a href="#como-funciona">Como funciona</a>
+      <a href="#privacidade">Privacidade</a>
+      <a href="#perguntas">Perguntas</a>
+      <a href="https://github.com/igor-gregori/driveleaf">GitHub</a>
+    </div>
+    <div class="nav-end">
+      <a class="lang" href="/" hreflang="en" lang="en">English</a>
+      <a class="btn btn-primary btn-sm" href="#baixar">Baixar</a>
+    </div>
+  </nav>
+</header>
+
+<main id="main">
+  <section class="hero">
+    <div class="container">
+      <a class="pill" href="https://github.com/igor-gregori/driveleaf/releases/latest"><b>0.1</b> Primeira versão, grátis e open source</a>
+      <h1>Veja o que ocupa o seu disco. <span class="gradient">Em instantes.</span></h1>
+      <p class="lead">O Driveleaf é um analisador de espaço em disco grátis e open source para Windows. Ele lê a Master File Table do NTFS diretamente, então até uma unidade cheia é analisada em instantes, e mostra tudo como um treemap que você explora com cliques.</p>
+      <div class="cta">
+        <a class="btn btn-primary" href="https://github.com/igor-gregori/driveleaf/releases/latest">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M3 5.6 10.4 4.6v7H3zm8.4-1.1L21 3.2v8.4h-9.6zM3 12.4h7.4v7L3 18.4zm8.4 0H21v8.4l-9.6-1.3z"/></svg>
+          Baixar para Windows
+        </a>
+        <a class="btn btn-outline" href="https://github.com/igor-gregori/driveleaf">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 .5a11.5 11.5 0 0 0-3.64 22.41c.58.1.79-.25.79-.56v-2c-3.2.7-3.87-1.37-3.87-1.37-.53-1.33-1.28-1.68-1.28-1.68-1.05-.72.08-.7.08-.7 1.16.08 1.77 1.19 1.77 1.19 1.03 1.77 2.7 1.26 3.36.96.1-.75.4-1.26.73-1.55-2.56-.29-5.25-1.28-5.25-5.69 0-1.26.45-2.29 1.19-3.1-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.17 1.18a11 11 0 0 1 5.77 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.11 3.05.74.81 1.19 1.84 1.19 3.1 0 4.42-2.7 5.4-5.26 5.68.41.36.78 1.06.78 2.14v3.17c0 .31.21.67.8.56A11.5 11.5 0 0 0 12 .5z"/></svg>
+          Ver no GitHub
+        </a>
+      </div>
+      <p class="fine">Windows 10 e 11 · instalador de 1,7 MB ou .exe portátil · MIT ou Apache-2.0</p>
+      <div class="shot">
+        <img src="/assets/overview-dark-pt.webp" width="1280" height="800" alt="O Driveleaf mostrando a unidade C: como um treemap, com vídeos, backups e jogos como as maiores pastas, ao lado da árvore de pastas ordenada por tamanho" fetchpriority="high">
+      </div>
+      <div class="legend" aria-label="Cores do treemap">
+        <span><i style="background:var(--t-document)"></i>Documentos</span>
+        <span><i style="background:var(--t-image)"></i>Imagens</span>
+        <span><i style="background:var(--t-video)"></i>Vídeo</span>
+        <span><i style="background:var(--t-audio)"></i>Áudio</span>
+        <span><i style="background:var(--t-archive)"></i>Compactados</span>
+        <span><i style="background:var(--t-code)"></i>Código</span>
+        <span><i style="background:var(--t-app)"></i>Aplicativos</span>
+        <span><i style="background:var(--t-system)"></i>Sistema</span>
+      </div>
+      <div class="stats">
+        <div class="stat"><strong>0,32 s</strong><span>para ler 712 mil registros da MFT em um NVMe</span></div>
+        <div class="stat"><strong>0,12%</strong><span>de diferença do espaço usado que o NTFS informa, em um disco real de 534 GB</span></div>
+        <div class="stat"><strong>200 mil</strong><span>quadrados no treemap, desenhados pela GPU</span></div>
+        <div class="stat"><strong>0 bytes</strong><span>enviados para fora: sem telemetria, sem checagem de atualização</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="recursos" class="section-soft">
+    <div class="container">
+      <p class="eyebrow">Recursos</p>
+      <h2>Tudo o que você precisa para liberar espaço no disco, e nada além</h2>
+      <p class="section-lead">Escolha uma unidade, clique em Analisar, e as maiores pastas e arquivos aparecem na hora. Clique para selecionar, dê dois cliques para entrar, use o botão direito para ações.</p>
+      <div class="grid">
+        <article class="card">
+          <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/></svg></div>
+          <h3>Analisa em instantes</h3>
+          <p>Com permissão de administrador, o Driveleaf lê a Master File Table em paralelo, em vez de abrir pasta por pasta. Uma unidade com meio milhão de arquivos leva cerca de um terço de segundo.</p>
+        </article>
+        <article class="card" style="--accent: var(--t-document)">
+          <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></svg></div>
+          <h3>Funciona sem administrador</h3>
+          <p>Sem permissão elevada, ele percorre as pastas em paralelo. É assim também que lê unidades exFAT, ReFS, USB e de rede.</p>
+        </article>
+        <article class="card" style="--accent: var(--t-archive)">
+          <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 12H2"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/><path d="M6 16h.01M10 16h.01"/></svg></div>
+          <h3>Bate com o disco</h3>
+          <p>Hard links contam uma vez, arquivos compactados e esparsos contam o que realmente ocupam, e os metadados do sistema de arquivos ficam numa pasta própria.</p>
+        </article>
+        <article class="card" style="--accent: var(--t-app)">
+          <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 13h10M13 3v18M13 9h8"/></svg></div>
+          <h3>Um treemap que acompanha</h3>
+          <p>Até 200 mil quadrados desenhados com WebGL2, os maiores com nome, e zoom suave em qualquer pasta. A cor mostra o tipo de arquivo num relance.</p>
+        </article>
+        <article class="card" style="--accent: var(--t-code)">
+          <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg></div>
+          <h3>Encontra qualquer coisa</h3>
+          <p>Os maiores arquivos da unidade, o espaço de cada tipo de arquivo e <kbd>Ctrl</kbd>+<kbd>K</kbd> para buscar qualquer nome em milissegundos.</p>
+        </article>
+        <article class="card" style="--accent: var(--t-image)">
+          <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg></div>
+          <h3>Cuidadoso com seus arquivos</h3>
+          <p>Ele só lê, a não ser que você peça. Remover manda para a Lixeira, sempre depois de uma confirmação, e arquivos do sistema são recusados.</p>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section id="como-funciona">
+    <div class="container">
+      <p class="eyebrow">Como funciona</p>
+      <h2>Por que o Driveleaf é rápido</h2>
+      <p class="section-lead">A maioria dos analisadores de disco pede ao Windows o conteúdo de cada pasta, uma de cada vez. O Driveleaf vai direto à fonte.</p>
+      <div class="steps">
+        <div class="step">
+          <h3>Lê o índice, não as pastas</h3>
+          <p>O NTFS guarda um registro de cada arquivo na sua Master File Table. O Driveleaf lê essa tabela em blocos grandes, em várias threads ao mesmo tempo, e monta a árvore inteira a partir dela.</p>
+        </div>
+        <div class="step">
+          <h3>Conta o que é usado de verdade</h3>
+          <p>Os tamanhos vêm dos clusters que cada arquivo ocupa. Num disco real de 534 GB, o total fica a 0,12% do espaço usado que o NTFS informa.</p>
+        </div>
+        <div class="step">
+          <h3>Explora pela GPU</h3>
+          <p>O treemap é calculado em Rust e desenhado pela placa de vídeo, então o zoom e o passar do mouse continuam fluidos mesmo com centenas de milhares de quadrados.</p>
+        </div>
+      </div>
+      <p class="note"><strong>Medido, não prometido.</strong> Todos os números desta página vêm <a href="https://github.com/igor-gregori/driveleaf/blob/main/docs/benchmarks.md">dos benchmarks publicados</a>, com os scripts para reproduzi-los.</p>
+    </div>
+  </section>
+
+  <section class="section-soft" aria-labelledby="telas-titulo">
+    <div class="container">
+      <p class="eyebrow">Telas</p>
+      <h2 id="telas-titulo">Claro ou escuro, segue o Windows</h2>
+      <div class="gallery">
+        <figure>
+          <img src="/assets/overview-light-pt.webp" width="1280" height="800" loading="lazy" decoding="async" alt="O Driveleaf no tema claro, com o treemap e a árvore de pastas">
+          <figcaption>O tema claro, seguindo o Windows.</figcaption>
+        </figure>
+        <figure>
+          <img src="/assets/top-files-pt.webp" width="1280" height="800" loading="lazy" decoding="async" alt="A lista dos maiores arquivos da unidade">
+          <figcaption>Os maiores arquivos da unidade inteira.</figcaption>
+        </figure>
+        <figure>
+          <img src="/assets/search-pt.webp" width="1280" height="800" loading="lazy" decoding="async" alt="Busca por qualquer nome de arquivo com Ctrl+K">
+          <figcaption>Busque qualquer nome com Ctrl+K.</figcaption>
+        </figure>
+      </div>
+    </div>
+  </section>
+
+  <section id="privacidade">
+    <div class="container split">
+      <div>
+        <p class="eyebrow">Privacidade e segurança</p>
+        <h2>Seus arquivos continuam seus</h2>
+        <p class="section-lead">Um analisador de disco vê o nome de todos os seus arquivos. O Driveleaf mantém tudo isso no seu computador.</p>
+      </div>
+      <ul class="checks">
+        <li>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m8 12 3 3 5-6"/></svg>
+          <div><strong>Nenhuma conexão de rede</strong><span>Sem telemetria, sem checagem de atualização e sem conteúdo remoto, garantido por uma política de segurança de conteúdo rígida.</span></div>
+        </li>
+        <li>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m8 12 3 3 5-6"/></svg>
+          <div><strong>Só leitura por padrão</strong><span>Nada é apagado sozinho. Remover manda para a Lixeira, depois que você confirma.</span></div>
+        </li>
+        <li>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m8 12 3 3 5-6"/></svg>
+          <div><strong>Protege o sistema</strong><span>Arquivos do Windows, o arquivo de paginação e os metadados do sistema de arquivos não podem ser removidos pelo app.</span></div>
+        </li>
+        <li>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m8 12 3 3 5-6"/></svg>
+          <div><strong>Aberto para inspeção</strong><span>Cada linha está no GitHub. O parser trata o disco como entrada não confiável e passa por testes de fuzzing.</span></div>
+        </li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="section-soft" aria-labelledby="motor-titulo">
+    <div class="container split">
+      <div>
+        <p class="eyebrow">Para desenvolvedores</p>
+        <h2 id="motor-titulo">O motor é seu para reutilizar</h2>
+        <p class="section-lead">O scanner é escrito em Rust e não depende da interface. Use pela linha de comando ou como crates nas suas próprias ferramentas.</p>
+        <pre class="code"><code><span class="dim"># Todos os arquivos do C:, em JSON ou CSV</span>
+driveleaf-cli scan C: --format json
+
+<span class="dim"># O parser da MFT no seu projeto</span>
+cargo add driveleaf-ntfs</code></pre>
+      </div>
+      <div class="crates">
+        <a class="crate" href="https://crates.io/crates/driveleaf-ntfs"><code>driveleaf-ntfs</code><span>Parser da MFT sem código unsafe, e leitor de volumes do Windows</span></a>
+        <a class="crate" href="https://crates.io/crates/driveleaf-core"><code>driveleaf-core</code><span>Modelo de uso do disco, consultas e varredura de pastas</span></a>
+        <a class="crate" href="https://crates.io/crates/driveleaf-treemap"><code>driveleaf-treemap</code><span>Layout de treemap squarified</span></a>
+        <a class="crate" href="https://crates.io/crates/driveleaf-win"><code>driveleaf-win</code><span>Utilitários do Windows: volumes, Explorer, Lixeira</span></a>
+      </div>
+    </div>
+  </section>
+
+  <section id="baixar">
+    <div class="container">
+      <div class="download">
+        <svg class="mosaic" viewBox="0 0 420 320" aria-hidden="true">
+          <rect x="0" y="0" width="200" height="180" rx="10" style="fill:var(--t-video)"/>
+          <rect x="206" y="0" width="120" height="110" rx="10" style="fill:var(--t-archive)"/>
+          <rect x="332" y="0" width="88" height="110" rx="10" style="fill:var(--t-app)"/>
+          <rect x="206" y="116" width="214" height="64" rx="10" style="fill:var(--t-document)"/>
+          <rect x="0" y="186" width="130" height="134" rx="10" style="fill:var(--t-image)"/>
+          <rect x="136" y="186" width="90" height="64" rx="10" style="fill:var(--t-audio)"/>
+          <rect x="136" y="256" width="90" height="64" rx="10" style="fill:var(--t-code)"/>
+          <rect x="232" y="186" width="90" height="134" rx="10" style="fill:var(--t-system)"/>
+          <rect x="328" y="186" width="92" height="70" rx="10" style="fill:var(--t-archive)"/>
+          <rect x="328" y="262" width="92" height="58" rx="10" style="fill:var(--t-document)"/>
+        </svg>
+        <p class="eyebrow">Baixar</p>
+        <h2>Baixe o Driveleaf para Windows</h2>
+        <p class="section-lead">Grátis, sem anúncios e sem conta. Instale, ou rode o .exe portátil de qualquer lugar.</p>
+        <div class="cta">
+          <a class="btn btn-primary" href="https://github.com/igor-gregori/driveleaf/releases/latest">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M3 5.6 10.4 4.6v7H3zm8.4-1.1L21 3.2v8.4h-9.6zM3 12.4h7.4v7L3 18.4zm8.4 0H21v8.4l-9.6-1.3z"/></svg>
+            Baixar o instalador
+          </a>
+          <a class="btn btn-outline" href="https://github.com/igor-gregori/driveleaf/releases/latest">.exe portátil</a>
+        </div>
+        <div class="requirements">
+          <span>Windows 10 ou 11, 64 bits</span>
+          <span>Administrador opcional</span>
+          <span>Português e inglês</span>
+        </div>
+        <p class="smartscreen">A assinatura de código está a caminho. Até lá, o SmartScreen do Windows pode avisar sobre um app novo: escolha <strong>Mais informações</strong> e depois <strong>Executar assim mesmo</strong>.</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="perguntas" class="section-soft">
+    <div class="container center">
+      <p class="eyebrow">Perguntas</p>
+      <h2>Perguntas frequentes</h2>
+      <div class="faq" style="text-align:left">
+        <details>
+          <summary>O Driveleaf é grátis?</summary>
+          <p>Sim. O Driveleaf é grátis e open source, sob a licença MIT ou Apache-2.0, para uso pessoal e comercial, sem anúncios e sem conta.</p>
+        </details>
+        <details>
+          <summary>O Driveleaf precisa de permissão de administrador?</summary>
+          <p>Não. Com permissão de administrador ele lê a Master File Table do NTFS, que é o modo rápido. Sem ela, percorre as pastas em paralelo, o que também cobre exFAT, ReFS e unidades de rede. O app oferece reabrir como administrador quando isso ajuda.</p>
+        </details>
+        <details>
+          <summary>O Driveleaf pode apagar meus arquivos?</summary>
+          <p>Só quando você pede. O Driveleaf apenas lê a unidade. Remover um item manda para a Lixeira depois de uma confirmação, e arquivos do sistema são recusados.</p>
+        </details>
+        <details>
+          <summary>Como o Driveleaf se compara ao WizTree, WinDirStat e TreeSize?</summary>
+          <p>Todos mostram onde está o espaço do disco. O Driveleaf lê a Master File Table do NTFS, como o WizTree, e é isso que faz uma análise completa levar instantes. Ele é open source e grátis para qualquer uso, inclusive no trabalho.</p>
+        </details>
+        <details>
+          <summary>O Driveleaf envia algum dado?</summary>
+          <p>Não. O app não faz nenhuma conexão de rede: sem telemetria, sem checagem de atualização e sem conteúdo remoto.</p>
+        </details>
+        <details>
+          <summary>Quais versões do Windows o Driveleaf suporta?</summary>
+          <p>Windows 10 e Windows 11, 64 bits. O modo rápido funciona em unidades NTFS, e as demais são analisadas pasta por pasta.</p>
+        </details>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer class="site-footer">
+  <div class="container footer-grid">
+    <div>
+      <a class="brand" href="/pt-br/"><img src="/assets/icon-64.png" width="28" height="28" alt="">Driveleaf</a>
+      <p>Open source sob MIT ou Apache-2.0. Este site conta visitas com o Cloudflare Web Analytics, que não usa cookies. O app em si nunca se conecta à internet.</p>
+    </div>
+    <div class="footer-links">
+      <a href="https://github.com/igor-gregori/driveleaf">GitHub</a>
+      <a href="https://github.com/igor-gregori/driveleaf/releases">Versões</a>
+      <a href="https://github.com/igor-gregori/driveleaf/blob/main/docs/benchmarks.md">Benchmarks</a>
+      <a href="https://github.com/igor-gregori/driveleaf/blob/main/SECURITY.md">Segurança</a>
+      <a href="/" hreflang="en" lang="en">English</a>
+    </div>
+  </div>
+</footer>
+</body>
+</html>

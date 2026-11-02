@@ -6,6 +6,11 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+readme = "README.md"
+keywords = ["ntfs", "mft", "filesystem", "windows", "disk-usage"]
+categories = ["filesystem", "parser-implementations"]
 
 [lints]
 workspace = true

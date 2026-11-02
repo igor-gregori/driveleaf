@@ -4,7 +4,7 @@ PackageLocale: en-US
 Publisher: The Driveleaf Authors
 PublisherUrl: https://github.com/{{REPOSITORY}}
 PackageName: Driveleaf
-PackageUrl: https://github.com/{{REPOSITORY}}
+PackageUrl: https://driveleaf.app
 License: MIT OR Apache-2.0
 LicenseUrl: https://github.com/{{REPOSITORY}}/blob/main/LICENSE-MIT
 ShortDescription: Fast, open-source disk space analyzer that reads the NTFS Master File Table.

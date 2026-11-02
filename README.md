@@ -27,8 +27,9 @@ moments, and it shows what fills your disk as a treemap you can click through.
 
 ## Install
 
-Driveleaf has no public release yet. When it does, the installer and a portable
-`.exe` will be on the releases page, and on `winget` and Scoop.
+Download the installer or the portable `.exe` from [driveleaf.app](https://driveleaf.app)
+or the [releases page](https://github.com/igor-gregori/driveleaf/releases/latest). It runs on Windows 10 and 11,
+64-bit.
 
 ## Using it
 
@@ -44,8 +45,9 @@ back. Right-click for actions.
 | `Enter` | Open the selected folder in the treemap |
 | `Delete` | Send the selected item to the Recycle Bin, after confirming |
 
-The app starts without administrator rights. If it scans in slow mode, the status
-bar offers **Reopen as administrator**, which shows the normal Windows prompt.
+The app starts without administrator rights. On an NTFS drive the title bar then
+offers **Reopen as administrator**, which shows the normal Windows prompt and
+unlocks the fast mode.
 
 ### How sizes are counted
 

@@ -1,0 +1,3 @@
+geist-latin-wght-normal.woff2 is the Geist typeface by the Geist Project Authors
+(https://github.com/vercel/geist-font), as packaged by Fontsource. It is licensed
+under the SIL Open Font License, Version 1.1: https://openfontlicense.org
