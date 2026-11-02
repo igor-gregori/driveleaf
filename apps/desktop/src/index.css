@@ -154,6 +154,17 @@
   html {
     @apply font-sans;
     }
+  /* Tailwind 4 leaves buttons with the arrow; anything clickable gets the hand. */
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]),
+  [role="tab"]:not([data-disabled]),
+  [role="menuitem"]:not([data-disabled]),
+  [role="option"]:not([data-disabled]),
+  [role="treeitem"],
+  [data-slot="command-item"]:not([data-disabled="true"]),
+  a[href] {
+    cursor: pointer;
+  }
 }
 /* With Mica the window itself shows through; without it the app stays opaque. */
 .app-surface {

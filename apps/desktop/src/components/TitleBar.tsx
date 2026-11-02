@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { Copy, Leaf, Minus, Search, Square, X } from "lucide-react";
+import { Copy, Leaf, Minus, Search, ShieldCheck, Square, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   Select,
   SelectContent,
@@ -18,10 +19,12 @@ interface Props {
   letter: string;
   scanning: boolean;
   scanned: boolean;
+  elevated: boolean;
   onLetter: (letter: string) => void;
   onScan: () => void;
   onCancel: () => void;
   onSearch: () => void;
+  onReopen: () => void;
 }
 
 function WindowButton({
@@ -42,8 +45,8 @@ function WindowButton({
       title={label}
       className={
         danger
-          ? "grid h-full w-11 place-items-center hover:bg-red-600 hover:text-white"
-          : "grid h-full w-11 place-items-center hover:bg-accent"
+          ? "grid h-full w-11 cursor-default place-items-center hover:bg-red-600 hover:text-white"
+          : "grid h-full w-11 cursor-default place-items-center hover:bg-accent"
       }
       onClick={onClick}
     >
@@ -57,12 +60,17 @@ export function TitleBar({
   letter,
   scanning,
   scanned,
+  elevated,
   onLetter,
   onScan,
   onCancel,
   onSearch,
+  onReopen,
 }: Props) {
   const appWindow = getCurrentWindow();
+  // Only NTFS has a fast mode to unlock.
+  const canReopen =
+    !elevated && volumes.find((volume) => volume.letter === letter)?.fileSystem === "NTFS";
   const [maximized, setMaximized] = useState(false);
 
   useEffect(() => {
@@ -110,8 +118,27 @@ export function TitleBar({
       >
         <Search className="size-3.5" />
         {t("search.open")}
-        <kbd className="ml-1 text-[10px] tracking-wide">Ctrl K</kbd>
+        <kbd className="ml-1 inline-flex h-4 items-center rounded border bg-muted px-1 font-sans text-[10px] leading-none font-medium">
+          Ctrl K
+        </kbd>
       </Button>
+      {canReopen && (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7 gap-1.5 border-amber-500/60 bg-amber-500/10 text-amber-700 hover:bg-amber-500/20 hover:text-amber-800 dark:text-amber-300 dark:hover:text-amber-200"
+              disabled={scanning}
+              onClick={onReopen}
+            >
+              <ShieldCheck className="size-3.5" />
+              {t("mode.reopen")}
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>{t("mode.reopenHint")}</TooltipContent>
+        </Tooltip>
+      )}
       <div data-tauri-drag-region className="h-full flex-1" />
       <WindowButton label={t("window.minimize")} onClick={() => void appWindow.minimize()}>
         <Minus className="size-3.5" />

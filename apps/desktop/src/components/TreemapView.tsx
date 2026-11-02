@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { t } from "@/i18n";
+import { locale, t } from "@/i18n";
 import { type Row, api } from "@/lib/api";
+import { formatBytes } from "@/lib/format";
+import { type Label, drawLabels, labelCandidates } from "@/treemap/labels";
 import { type Palette, TreemapRenderer, type View, readPalette } from "@/treemap/renderer";
 import { TileBuffer } from "@/treemap/tiles";
 
@@ -53,7 +55,53 @@ export function TreemapView({
   const selectedRef = useRef(selected);
   selectedRef.current = selected;
   const laidOutSizeRef = useRef("");
+  const labelCanvasRef = useRef<HTMLCanvasElement>(null);
+  const labelsRef = useRef<Label[]>([]);
+  const labelTicketRef = useRef(0);
+  const paletteRef = useRef<Palette | null>(null);
   const [unavailable, setUnavailable] = useState(false);
+
+  const paintLabels = useCallback(() => {
+    const canvas = labelCanvasRef.current;
+    const context = canvas?.getContext("2d");
+    if (!canvas || !context) return;
+    context.setTransform(1, 0, 0, 1, 0, 0);
+    context.clearRect(0, 0, canvas.width, canvas.height);
+    const tiles = tilesRef.current;
+    const palette = paletteRef.current;
+    if (tiles && palette) {
+      drawLabels(context, tiles, labelsRef.current, palette, window.devicePixelRatio);
+    }
+  }, []);
+
+  const clearLabels = useCallback(() => {
+    labelTicketRef.current++;
+    labelsRef.current = [];
+    paintLabels();
+  }, [paintLabels]);
+
+  // Labels are drawn in layout space, so they only show while the view is at rest.
+  const refreshLabels = useCallback(async () => {
+    const tiles = tilesRef.current;
+    if (!tiles) return;
+    const ticket = ++labelTicketRef.current;
+    const indices = labelCandidates(tiles);
+    if (indices.length === 0) return;
+    let rows: Row[];
+    try {
+      rows = await api.getRows(indices.map((index) => tiles.nodeOf(index)));
+    } catch {
+      // A new scan replaced the tree meanwhile; its own load brings new labels.
+      return;
+    }
+    if (ticket !== labelTicketRef.current || tilesRef.current !== tiles) return;
+    labelsRef.current = indices.map((index, position) => ({
+      index,
+      name: rows[position].name,
+      detail: formatBytes(rows[position].allocated, locale),
+    }));
+    paintLabels();
+  }, [paintLabels]);
 
   const redraw = useCallback(() => {
     if (frameRef.current) return;
@@ -119,6 +167,7 @@ export function TreemapView({
       tilesRef.current = next;
       shownFocusRef.current = focus;
       shownScanRef.current = scanId;
+      clearLabels();
       renderer.upload(bytes);
       renderer.setView(identity);
       applySelection();
@@ -128,16 +177,24 @@ export function TreemapView({
     const inward = current && sameScan && previous !== focus ? current.indexOfNode(focus) : -1;
     const outward = sameScan && previous !== null && previous !== focus ? next.indexOfNode(previous) : -1;
     if (inward >= 0) {
-      animate(identity, renderer.viewOnto(current!.rectOf(inward)), show);
+      clearLabels();
+      animate(identity, renderer.viewOnto(current!.rectOf(inward)), () => {
+        show();
+        void refreshLabels();
+      });
     } else if (outward >= 0) {
       const from = renderer.viewOnto(next.rectOf(outward));
       show();
       renderer.setView(from);
-      animate(from, identity, () => renderer.setView(identity));
+      animate(from, identity, () => {
+        renderer.setView(identity);
+        void refreshLabels();
+      });
     } else {
       show();
+      void refreshLabels();
     }
-  }, [animate, applySelection, focus, scanId]);
+  }, [animate, applySelection, clearLabels, focus, refreshLabels, scanId]);
 
   const latestLoadRef = useRef(load);
   latestLoadRef.current = load;
@@ -157,8 +214,10 @@ export function TreemapView({
     softwareRef.current = isSoftwareRenderer(renderer.gpuName());
 
     const applyTheme = (palette: Palette) => {
+      paletteRef.current = palette;
       renderer.setPalette(palette);
       renderer.draw();
+      paintLabels();
     };
     applyTheme(readPalette(document.documentElement));
     const themeWatcher = new MutationObserver(() => applyTheme(readPalette(document.documentElement)));
@@ -167,6 +226,12 @@ export function TreemapView({
     const fit = () => {
       const { width, height } = canvas.getBoundingClientRect();
       renderer.resize(width, height, window.devicePixelRatio);
+      const overlay = labelCanvasRef.current;
+      if (overlay) {
+        overlay.width = Math.round(Math.max(1, width) * window.devicePixelRatio);
+        overlay.height = Math.round(Math.max(1, height) * window.devicePixelRatio);
+        paintLabels();
+      }
       return `${width}x${height}`;
     };
     fit();
@@ -186,7 +251,7 @@ export function TreemapView({
       observer.disconnect();
       themeWatcher.disconnect();
     };
-  }, []);
+  }, [paintLabels]);
 
   useEffect(() => {
     void load();
@@ -212,6 +277,7 @@ export function TreemapView({
     if (!renderer || !tiles) return;
     const index = tileAt(event);
     if (index === renderer.hover) return;
+    event.currentTarget.style.cursor = index >= 0 ? "pointer" : "default";
     renderer.hover = index;
     redraw();
 
@@ -252,24 +318,27 @@ export function TreemapView({
   }
 
   return (
-    <canvas
-      ref={canvasRef}
-      className="size-full"
-      onMouseMove={onMouseMove}
-      onMouseLeave={onMouseLeave}
-      onClick={(event) => {
-        const node = nodeUnder(event);
-        if (node !== null) onSelect(node);
-      }}
-      onDoubleClick={(event) => {
-        const tiles = tilesRef.current;
-        const index = tileAt(event);
-        if (tiles && index >= 0 && tiles.isFolder(index)) onOpen(tiles.nodeOf(index));
-      }}
-      onContextMenu={(event) => {
-        const node = nodeUnder(event);
-        if (node !== null) onMenu(node);
-      }}
-    />
+    <div className="relative size-full">
+      <canvas
+        ref={canvasRef}
+        className="size-full"
+        onMouseMove={onMouseMove}
+        onMouseLeave={onMouseLeave}
+        onClick={(event) => {
+          const node = nodeUnder(event);
+          if (node !== null) onSelect(node);
+        }}
+        onDoubleClick={(event) => {
+          const tiles = tilesRef.current;
+          const index = tileAt(event);
+          if (tiles && index >= 0 && tiles.isFolder(index)) onOpen(tiles.nodeOf(index));
+        }}
+        onContextMenu={(event) => {
+          const node = nodeUnder(event);
+          if (node !== null) onMenu(node);
+        }}
+      />
+      <canvas ref={labelCanvasRef} className="pointer-events-none absolute inset-0 size-full" />
+    </div>
   );
 }

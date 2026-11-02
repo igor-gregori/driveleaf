@@ -1,6 +1,5 @@
-import { Rabbit, ShieldCheck, Turtle } from "lucide-react";
+import { Rabbit, Turtle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { t, locale } from "@/i18n";
 import type { TextKey } from "@/i18n";
@@ -22,11 +21,9 @@ const LEGEND: Category[] = [
 interface Props {
   shown: Row | null;
   summary: ScanSummary | null;
-  elevated: boolean;
-  onReopen: () => void;
 }
 
-export function StatusBar({ shown, summary, elevated, onReopen }: Props) {
+export function StatusBar({ shown, summary }: Props) {
   const fast = summary?.mode === "mft";
   const ModeIcon = fast ? Rabbit : Turtle;
   return (
@@ -75,17 +72,6 @@ export function StatusBar({ shown, summary, elevated, onReopen }: Props) {
             </Badge>
           </TooltipTrigger>
           <TooltipContent>{t(fast ? "mode.fastHint" : "mode.slowHint")}</TooltipContent>
-        </Tooltip>
-      )}
-      {summary && !fast && !elevated && (
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button size="sm" variant="outline" className="h-5 gap-1 px-2 text-[10px]" onClick={onReopen}>
-              <ShieldCheck className="size-3" />
-              {t("mode.reopen")}
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>{t("mode.reopenHint")}</TooltipContent>
         </Tooltip>
       )}
     </footer>

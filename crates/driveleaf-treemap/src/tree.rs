@@ -7,6 +7,8 @@ use crate::{Rect, Tile, squarify};
 
 /// Marks a tile as a folder, drawn behind its contents.
 pub const STYLE_FOLDER: u32 = 1 << 16;
+/// Marks a folder whose contents were laid out on top of it.
+pub const STYLE_OPENED: u32 = 1 << 17;
 
 /// What the layout needs to know about a tree.
 pub trait TreeSource: Sync {
@@ -118,6 +120,7 @@ pub fn layout_tree<T: TreeSource + ?Sized>(
     let mut rects = Vec::new();
 
     while let Some(folder) = pending.pop() {
+        let folder_tile = tiles.len();
         tiles.push(Tile::from_rect(
             folder.rect,
             style(tree.category(folder.node), folder.depth) | STYLE_FOLDER,
@@ -157,6 +160,9 @@ pub fn layout_tree<T: TreeSource + ?Sized>(
                 rects.push((shown[index], rect));
             }
         });
+        if !rects.is_empty() {
+            tiles[folder_tile].color |= STYLE_OPENED;
+        }
         for &(child, rect) in &rects {
             let depth = folder.depth.saturating_add(1);
             let opens = tree.is_directory(child) && !tree.children(child).is_empty();
@@ -280,6 +286,8 @@ mod tests {
         assert_eq!(file.color & 0xFF, 3);
         assert_eq!((file.color >> 8) & 0xFF, 2);
         assert_eq!(file.color & STYLE_FOLDER, 0);
+        assert_eq!(file.color & STYLE_OPENED, 0);
+        assert_ne!(tiles[0].color & STYLE_OPENED, 0);
     }
 
     #[test]
@@ -354,5 +362,6 @@ mod tests {
         let tree = Table::new(&[(0, 0, 0)]);
         let tiles = layout_tree(&tree, 0, 100.0, 100.0, &LayoutOptions::default());
         assert_eq!(tiles.len(), 1);
+        assert_eq!(tiles[0].color & STYLE_OPENED, 0);
     }
 }

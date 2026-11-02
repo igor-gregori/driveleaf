@@ -299,6 +299,24 @@ pub fn get_node(state: State<'_, AppState>, node: NodeId) -> Result<Row, String>
     })
 }
 
+/// Rows for many nodes at once, such as the labels of the treemap.
+#[tauri::command]
+pub fn get_rows(state: State<'_, AppState>, nodes: Vec<NodeId>) -> Result<Vec<Row>, String> {
+    const MAX_NODES: usize = 1_000;
+    if nodes.len() > MAX_NODES {
+        return Err(format!("at most {MAX_NODES} nodes per call"));
+    }
+    state.read(|model| {
+        nodes
+            .iter()
+            .map(|&node| {
+                check_node(model, node)?;
+                Ok(row(model, node))
+            })
+            .collect()
+    })
+}
+
 /// The node and its ancestors, from the root down.
 #[tauri::command]
 pub fn get_ancestry(state: State<'_, AppState>, node: NodeId) -> Result<Vec<Row>, String> {

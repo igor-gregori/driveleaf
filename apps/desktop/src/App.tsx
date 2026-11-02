@@ -224,10 +224,13 @@ export default function App() {
           letter={letter}
           scanning={scanning}
           scanned={scanned}
+          // Until the app knows, it assumes rights, so the button does not flash.
+          elevated={info?.elevated ?? true}
           onLetter={setLetter}
           onScan={() => startScan(letter)}
           onCancel={() => void api.cancelScan()}
           onSearch={() => setSearchOpen(true)}
+          onReopen={() => void api.relaunchElevated(letter || null).catch(reportFailure)}
         />
         {scanning && (
           <div className="flex shrink-0 items-center gap-3 border-b px-3 py-1.5 text-xs text-muted-foreground">
@@ -339,8 +342,6 @@ export default function App() {
         <StatusBar
           shown={hovered ?? selected}
           summary={summary}
-          elevated={info?.elevated ?? false}
-          onReopen={() => void api.relaunchElevated(letter || null).catch(reportFailure)}
         />
       </main>
 

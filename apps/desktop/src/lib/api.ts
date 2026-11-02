@@ -123,6 +123,7 @@ export const api = {
   },
   cancelScan: () => invoke<void>("cancel_scan"),
   getNode: (node: number) => invoke<Row>("get_node", { node }),
+  getRows: (nodes: number[]) => invoke<Row[]>("get_rows", { nodes }),
   getAncestry: (node: number) => invoke<Row[]>("get_ancestry", { node }),
   getPath: (node: number) => invoke<string>("get_path", { node }),
   countOtherLinks: (node: number) => invoke<number>("count_other_links", { node }),

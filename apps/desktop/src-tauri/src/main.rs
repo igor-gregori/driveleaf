@@ -25,6 +25,7 @@ fn main() {
             commands::start_scan,
             commands::cancel_scan,
             commands::get_node,
+            commands::get_rows,
             commands::get_ancestry,
             commands::get_path,
             commands::count_other_links,

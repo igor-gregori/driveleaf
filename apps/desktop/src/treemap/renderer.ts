@@ -1,6 +1,9 @@
 import { parseHexColor } from "./color";
 import { TILE_BYTES, type TileRect } from "./tiles";
 
+/** Space each file tile gives up on every side, in CSS pixels. */
+const TILE_GAP = 1.25;
+
 const VERTEX_SHADER = `#version 300 es
 layout(location = 0) in vec2 a_corner;
 layout(location = 1) in vec4 a_rect;
@@ -12,6 +15,7 @@ uniform int u_selected;
 uniform vec3 u_palette[10];
 uniform vec3 u_highlight;
 uniform float u_folder_step;
+uniform float u_gap;
 out vec2 v_local;
 out vec2 v_size;
 out vec3 v_color;
@@ -19,14 +23,20 @@ flat out float v_folder;
 flat out float v_outline;
 
 void main() {
-  vec2 size = a_rect.zw * u_view.z;
-  vec2 position = a_rect.xy * u_view.z + u_view.xy + a_corner * size;
-  v_local = a_corner * size;
-  v_size = size;
-
   uint category = a_style & 255u;
   float depth = float((a_style >> 8) & 255u);
   bool folder = (a_style & 65536u) != 0u;
+
+  // Each tile shrinks a little so neighbours stand apart. Folders shrink less,
+  // which keeps a margin around their contents.
+  vec2 size = a_rect.zw * u_view.z;
+  float gap = min((folder ? 0.5 : 1.0) * u_gap, 0.2 * min(size.x, size.y));
+  vec2 origin = a_rect.xy * u_view.z + u_view.xy + gap;
+  size -= 2.0 * gap;
+  vec2 position = origin + a_corner * size;
+  v_local = a_corner * size;
+  v_size = size;
+
   vec3 color = u_palette[category];
   if (folder) {
     color = color * (1.0 + u_folder_step * min(depth, 8.0));
@@ -51,7 +61,7 @@ flat in float v_outline;
 out vec4 fragment;
 
 void main() {
-  float radius = min(2.5, 0.3 * min(v_size.x, v_size.y));
+  float radius = min(4.5, 0.3 * min(v_size.x, v_size.y));
   vec2 q = abs(v_local - 0.5 * v_size) - (0.5 * v_size - radius);
   float distance = length(max(q, vec2(0.0))) + min(max(q.x, q.y), 0.0) - radius;
   float coverage = clamp(0.5 - distance, 0.0, 1.0);
@@ -134,6 +144,7 @@ export class TreemapRenderer {
       highlight: uniform("u_highlight"),
       folderStep: uniform("u_folder_step"),
     };
+    gl.uniform1f(uniform("u_gap"), TILE_GAP);
 
     gl.bindVertexArray(gl.createVertexArray());
 

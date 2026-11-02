@@ -1,12 +1,13 @@
 /**
  * Wire format of one tile: `x, y, w, h: f32`, then `style, nodeId: u32`, little-endian.
- * The style holds the category in its low byte, the depth in the next one, and
- * bit 16 marks a folder.
+ * The style holds the category in its low byte, the depth in the next one, bit 16
+ * marks a folder and bit 17 a folder whose contents are drawn on top of it.
  */
 export const TILE_BYTES = 24;
 
 const TILE_WORDS = TILE_BYTES / 4;
 const STYLE_FOLDER = 1 << 16;
+const STYLE_OPENED = 1 << 17;
 
 export interface TileRect {
   x: number;
@@ -53,6 +54,14 @@ export class TileBuffer {
 
   isFolder(index: number): boolean {
     return (this.words[index * TILE_WORDS + 4] & STYLE_FOLDER) !== 0;
+  }
+
+  isOpened(index: number): boolean {
+    return (this.words[index * TILE_WORDS + 4] & STYLE_OPENED) !== 0;
+  }
+
+  categoryOf(index: number): number {
+    return this.words[index * TILE_WORDS + 4] & 255;
   }
 
   rectOf(index: number): TileRect {

@@ -49,6 +49,12 @@ describe("TileBuffer", () => {
     expect(buffer.isFolder(1)).toBe(false);
   });
 
+  it("reads the category and whether a folder is opened", () => {
+    expect(buffer.categoryOf(1)).toBe(3);
+    expect(buffer.isOpened(0)).toBe(false);
+    expect(new TileBuffer(encode([[0, 0, 1, 1, FOLDER | (1 << 17), 1]])).isOpened(0)).toBe(true);
+  });
+
   it("gives back rectangles and finds nodes", () => {
     expect(buffer.rectOf(1)).toEqual({ x: 10, y: 10, w: 40, h: 80 });
     expect(buffer.indexOfNode(9)).toBe(2);
