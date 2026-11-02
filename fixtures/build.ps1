@@ -81,7 +81,14 @@ try {
     [IO.File]::WriteAllBytes("$root\compressed\ntfs.txt", $text)
     [IO.File]::WriteAllBytes("$root\compressed\wof.txt", $text)
     & compact /c "$root\compressed\ntfs.txt" | Out-Null
-    & compact /c /exe:lzx "$root\compressed\wof.txt" | Out-Null
+    # Windows Server editions may lack WOF, so check what compact really did.
+    & compact /c /exe:lzx "$root\compressed\wof.txt" | Select-Object -Last 2 | Write-Host
+    Add-Type -Namespace Fixture -Name Native -MemberDefinition '
+        [DllImport("kernel32.dll", CharSet = CharSet.Unicode)]
+        public static extern uint GetCompressedFileSizeW(string path, out uint high);'
+    $high = 0
+    $wof = [Fixture.Native]::GetCompressedFileSizeW("$root\compressed\wof.txt", [ref]$high) -lt $text.Length
+    Write-Host "WOF compression worked: $wof"
 
     # Alternate data streams.
     New-Item -ItemType Directory "$root\streams" | Out-Null
@@ -116,6 +123,7 @@ try {
         }
     $volume = Get-Volume -DriveLetter $Letter
     $manifest = [ordered]@{
+        wof = $wof
         entries = @($entries)
     }
     [IO.File]::WriteAllText(
